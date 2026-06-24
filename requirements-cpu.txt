@@ -1,0 +1,16 @@
+# CPU-only stack for development and PyInstaller builds (no CUDA / nvidia / triton).
+# Install:
+#   pip install -r requirements-cpu.txt
+#
+# PyTorch CPU wheels (adjust torch version if needed):
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+numpy
+pandas
+opencv-python
+Pillow
+matplotlib
+tqdm
+torch
+ultralytics
+PySide6>=6.5

@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "echo-seg-user-pipeline"
+version = "0.1.0"
+description = "ARIS echogram loading and YOLO segmentation desktop pipeline"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "pandas",
+    "opencv-python",
+    "Pillow",
+    "matplotlib",
+    "ultralytics",
+    "torch",
+    "PySide6>=6.5",
+]
+
+[project.optional-dependencies]
+dev = ["pyinstaller>=6.0"]
+
+[project.scripts]
+echo-seg-gui = "echo_seg_app.main:main"
+echo-seg-batch = "user_pipeline.batch_cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "echo_seg_app*",
+    "user_pipeline*",
+    "fisheye_loading*",
+    "analysis*",
+    "utils*",
+]
+
+[tool.setuptools.package-data]
+"*" = ["*.csv"]
