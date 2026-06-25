@@ -138,6 +138,12 @@ code {
   line-height: 1.05;
 }
 
+.section-toggle-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .section-toggle-button {
   width: auto;
   min-width: 72px;

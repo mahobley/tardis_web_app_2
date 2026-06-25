@@ -59,10 +59,15 @@
         <section class="form-section form-section-advanced">
           <div class="form-section-header">
             <h2 class="form-section-title">Advanced</h2>
-            <button id="advanced-toggle" type="button" class="section-toggle-button" aria-expanded="false"
-              aria-controls="advanced-content">
-              Show
-            </button>
+            <div class="section-toggle-group">
+              <button id="advanced-reset" type="button" class="section-toggle-button" hidden>
+                Reset
+              </button>
+              <button id="advanced-toggle" type="button" class="section-toggle-button" aria-expanded="false"
+                aria-controls="advanced-content">
+                Show
+              </button>
+            </div>
           </div>
           <div id="advanced-content" class="section-grid" hidden>
             <div class="field field-span-2">

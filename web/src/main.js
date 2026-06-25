@@ -32,6 +32,7 @@ const elements = {
   backend: document.querySelector("#backend"),
   confidence: document.querySelector("#confidence"),
   iou: document.querySelector("#iou"),
+  advancedReset: document.querySelector("#advanced-reset"),
   advancedToggle: document.querySelector("#advanced-toggle"),
   advancedContent: document.querySelector("#advanced-content"),
   nativeFps: document.querySelector("#native-fps"),
@@ -111,11 +112,44 @@ const MAX_ZOOM_REGION_SIZE = 256;
 const ZOOM_REGION_STEP = 16;
 const ZOOM_CANVAS_SIZE = 512;
 let zoomRegionSize = DEFAULT_ZOOM_REGION_SIZE;
+const ADVANCED_DEFAULTS = {
+  backend: "webgpu",
+  runAllFrames: true,
+  startFrame: "0",
+  endFrame: "-1",
+  nativeFps: true,
+  inferenceFps: "15",
+  nativeBins: true,
+  inferenceBins: "128",
+  confidence: "0.10",
+  iou: "0.50",
+  useBundledModel: true,
+};
 
 function setAdvancedExpanded(expanded) {
   elements.advancedContent.hidden = !expanded;
+  elements.advancedReset.hidden = !expanded;
   elements.advancedToggle.setAttribute("aria-expanded", String(expanded));
   elements.advancedToggle.textContent = expanded ? "Hide" : "Show";
+}
+
+function resetAdvancedSettings() {
+  elements.backend.value = ADVANCED_DEFAULTS.backend;
+  elements.runAllFrames.checked = ADVANCED_DEFAULTS.runAllFrames;
+  elements.startFrame.value = ADVANCED_DEFAULTS.startFrame;
+  elements.endFrame.value = ADVANCED_DEFAULTS.endFrame;
+  elements.nativeFps.checked = ADVANCED_DEFAULTS.nativeFps;
+  elements.inferenceFps.value = ADVANCED_DEFAULTS.inferenceFps;
+  elements.nativeBins.checked = ADVANCED_DEFAULTS.nativeBins;
+  elements.inferenceBins.value = ADVANCED_DEFAULTS.inferenceBins;
+  elements.confidence.value = ADVANCED_DEFAULTS.confidence;
+  elements.iou.value = ADVANCED_DEFAULTS.iou;
+  elements.useBundledModel.checked = ADVANCED_DEFAULTS.useBundledModel;
+  elements.modelFile.value = "";
+  syncFrameRangeState();
+  syncInferenceFpsState();
+  syncInferenceBinsState();
+  syncModelFileState();
 }
 
 function setStatus(text, progress = null) {
@@ -833,6 +867,10 @@ elements.nativeBins.addEventListener("change", () => {
   syncInferenceBinsState();
 });
 
+elements.advancedReset.addEventListener("click", () => {
+  resetAdvancedSettings();
+});
+
 elements.advancedToggle.addEventListener("click", () => {
   setAdvancedExpanded(elements.advancedContent.hidden);
 });
@@ -952,9 +990,9 @@ window.addEventListener("keydown", (event) => {
 });
 
 syncFrameRangeState();
-syncModelFileState();
 syncInferenceFpsState();
 syncInferenceBinsState();
+syncModelFileState();
 setAdvancedExpanded(false);
 syncRunButtonLabel();
 updateDownloadButtons();
