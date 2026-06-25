@@ -80,6 +80,7 @@ const state = {
   predictionRows: [],
   displayRows: [],
   frameIndices: null,
+  decodeRequest: null,
   inferenceFrameRate: null,
   inferenceUsedNativeFps: true,
   inferenceNumBins: null,
@@ -356,6 +357,24 @@ function syncRunButtonLabel() {
 
 function currentUpstreamDirection() {
   return elements.upstreamDirectionInputs.find((input) => input.checked)?.value ?? "left";
+}
+
+function currentDecodeRequest() {
+  return {
+    startFrame: elements.runAllFrames.checked ? 0 : Number(elements.startFrame.value),
+    endFrame: elements.runAllFrames.checked ? -1 : Number(elements.endFrame.value),
+  };
+}
+
+function decodeRequestMatchesCurrent() {
+  if (!state.decoded || !state.decodeRequest) {
+    return false;
+  }
+  const requested = currentDecodeRequest();
+  return (
+    state.decodeRequest.startFrame === requested.startFrame &&
+    state.decodeRequest.endFrame === requested.endFrame
+  );
 }
 
 function computeAutoInferenceTargets(width, height) {
@@ -757,13 +776,12 @@ async function decodeSelectedFile() {
   state.sonarFile = file;
 
   const buffer = await file.arrayBuffer();
-  const startFrame = elements.runAllFrames.checked ? 0 : Number(elements.startFrame.value);
-  const endFrame = elements.runAllFrames.checked ? -1 : Number(elements.endFrame.value);
+  const decodeRequest = currentDecodeRequest();
 
   setStatus("Generating echogram in JavaScript...", 0);
   const decoded = await decodeSonarBuffer(buffer, {
-    startFrame,
-    endFrame,
+    startFrame: decodeRequest.startFrame,
+    endFrame: decodeRequest.endFrame,
     bgs: true,
     rawThirdChannel: true,
     returnAsBgr: true,
@@ -784,6 +802,7 @@ async function decodeSelectedFile() {
   state.predictionRows = [];
   state.displayRows = [];
   state.frameIndices = null;
+  state.decodeRequest = decodeRequest;
   state.inferenceFrameRate = null;
   state.inferenceUsedNativeFps = true;
   state.exportFiles = {
@@ -809,7 +828,7 @@ async function decodeSelectedFile() {
 }
 
 async function runSegmentation() {
-  const decoded = state.decoded ?? (await decodeSelectedFile());
+  const decoded = decodeRequestMatchesCurrent() ? state.decoded : await decodeSelectedFile();
   const nativeHeaderFrameRate = headerFramerateFromMetadata(decoded.metadata);
   const session = await ensureSession();
   const nativeFrameRate = nativeHeaderFrameRate ?? framerateFromMetadata(decoded.metadata);
@@ -993,6 +1012,7 @@ function resetVisuals() {
   state.predictionRows = [];
   state.displayRows = [];
   state.frameIndices = null;
+  state.decodeRequest = null;
   state.inferenceFrameRate = null;
   state.inferenceUsedNativeFps = true;
   state.inferenceNumBins = null;
