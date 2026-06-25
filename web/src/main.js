@@ -31,6 +31,8 @@ const elements = {
   backend: document.querySelector("#backend"),
   confidence: document.querySelector("#confidence"),
   iou: document.querySelector("#iou"),
+  advancedToggle: document.querySelector("#advanced-toggle"),
+  advancedContent: document.querySelector("#advanced-content"),
   nativeFps: document.querySelector("#native-fps"),
   inferenceFps: document.querySelector("#inference-fps"),
   inferenceFpsField: document.querySelector("#inference-fps-field"),
@@ -101,6 +103,12 @@ const MAX_ZOOM_REGION_SIZE = 256;
 const ZOOM_REGION_STEP = 16;
 const ZOOM_CANVAS_SIZE = 512;
 let zoomRegionSize = DEFAULT_ZOOM_REGION_SIZE;
+
+function setAdvancedExpanded(expanded) {
+  elements.advancedContent.hidden = !expanded;
+  elements.advancedToggle.setAttribute("aria-expanded", String(expanded));
+  elements.advancedToggle.textContent = expanded ? "Hide" : "Show";
+}
 
 function setStatus(text, progress = null) {
   elements.statusText.textContent = text;
@@ -816,6 +824,10 @@ elements.nativeFps.addEventListener("change", () => {
   syncInferenceFpsState();
 });
 
+elements.advancedToggle.addEventListener("click", () => {
+  setAdvancedExpanded(elements.advancedContent.hidden);
+});
+
 for (const input of elements.upstreamDirectionInputs) {
   input.addEventListener("change", () => {
     if (!state.predictionRows.length) {
@@ -928,5 +940,6 @@ window.addEventListener("keydown", (event) => {
 syncFrameRangeState();
 syncModelFileState();
 syncInferenceFpsState();
+setAdvancedExpanded(false);
 updateDownloadButtons();
 setStatus("Idle.", 0);

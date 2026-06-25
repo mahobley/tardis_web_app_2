@@ -128,13 +128,27 @@ code {
 }
 
 .form-section-header {
-  display: grid;
-  gap: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
 }
 
 .form-section-title {
   font-size: 1.15rem;
   line-height: 1.05;
+}
+
+.section-toggle-button {
+  width: auto;
+  min-width: 72px;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid rgba(31, 41, 51, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 700;
 }
 
 .section-grid {
@@ -207,15 +221,15 @@ select:disabled {
 }
 
 .radio-group {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
-  flex-wrap: wrap;
 }
 
 .radio-option {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.55rem;
   min-height: var(--control-height);
   padding: 0.8rem 0.95rem;
