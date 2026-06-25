@@ -19,90 +19,165 @@
 
       <section class="control-grid">
         <form id="control-form" class="control-card">
-          <div class="field">
-            <label for="sonar-file">Sonar file</label>
-            <input id="sonar-file" type="file" accept=".aris,.ddf" />
-          </div>
-
-          <div class="section-heading">Options</div>
-
-          <div class="field-row">
-            <div class="field">
-              <label for="start-frame">Start frame</label>
-              <input id="start-frame" type="number" min="0" value="0" />
+          <section class="form-section">
+            <div class="form-section-header">
+              <h2 class="form-section-title">Input</h2>
             </div>
-            <div class="field">
-              <label for="end-frame">End frame</label>
-              <input id="end-frame" type="number" value="-1" />
+            <div class="section-grid">
+              <div class="field field-span-2">
+                <label for="sonar-file">Sonar file</label>
+                <input id="sonar-file" type="file" accept=".aris,.ddf" />
+              </div>
             </div>
-          </div>
+          </section>
 
-          <div class="field">
-            <label for="upstream-direction">Upstream direction</label>
-            <select id="upstream-direction">
-              <option value="left" selected>Left</option>
-              <option value="right">Right</option>
-            </select>
-          </div>
+          <section class="form-section">
+            <div class="form-section-header">
+              <h2 class="form-section-title">Processing</h2>
+            </div>
+            <div class="section-grid">
+              <div class="field field-span-2">
+                <label>Upstream direction</label>
+                <div class="radio-group">
+                  <label class="radio-option">
+                    <input
+                      id="upstream-direction-left"
+                      name="upstream-direction"
+                      type="radio"
+                      value="left"
+                      checked
+                    />
+                    Left
+                  </label>
+                  <label class="radio-option">
+                    <input
+                      id="upstream-direction-right"
+                      name="upstream-direction"
+                      type="radio"
+                      value="right"
+                    />
+                    Right
+                  </label>
+                </div>
+              </div>
 
-          <div class="section-heading">Advanced</div>
+              <div class="field field-span-2">
+                <label>Frame range</label>
+                <div class="pair-row">
+                  <div class="setting-card setting-card-compact">
+                    <label class="setting-toggle" for="run-all-frames">
+                      <input id="run-all-frames" type="checkbox" checked />
+                      <span class="setting-copy">
+                        <span class="setting-title">Run on all frames</span>
+                      </span>
+                    </label>
+                  </div>
 
-          <div class="field-row">
-            <div class="field">
-              <label for="backend">Runtime backend</label>
-              <select id="backend">
-                <option value="webgpu">WebGPU preferred</option>
-                <option value="wasm">WASM CPU only</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="confidence">Confidence</label>
-              <input id="confidence" type="number" min="0" max="1" step="0.01" value="0.10" />
-            </div>
-          </div>
+                  <div class="frame-range-grid">
+                    <div class="field" id="start-frame-field">
+                      <input
+                        id="start-frame"
+                        type="number"
+                        min="0"
+                        value="0"
+                        disabled
+                        placeholder="Start frame"
+                        aria-label="Start frame"
+                      />
+                    </div>
 
-          <div class="field-row">
-            <div class="field">
-              <label for="iou">IoU</label>
-              <input id="iou" type="number" min="0" max="1" step="0.01" value="0.50" />
-            </div>
-            <div class="field checkbox-field">
-              <label>
-                <input id="native-fps" type="checkbox" checked />
-                Native FPS
-              </label>
-            </div>
-          </div>
+                    <div class="frame-range-separator" aria-hidden="true">-</div>
 
-          <div class="field-row">
-            <div class="field">
-              <label for="inference-fps">Inference FPS</label>
-              <input
-                id="inference-fps"
-                type="number"
-                min="1"
-                max="120"
-                step="0.1"
-                value="15"
-                disabled
-              />
-            </div>
-            <div class="field checkbox-field">
-              <label>
-                <input id="use-bundled-model" type="checkbox" checked />
-                Use bundled <code>weights/noklamath.onnx</code>
-              </label>
-            </div>
-          </div>
+                    <div class="field" id="end-frame-field">
+                      <input
+                        id="end-frame"
+                        type="number"
+                        value="-1"
+                        disabled
+                        placeholder="End frame"
+                        aria-label="End frame"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+          </section>
 
-          <div class="field" id="model-file-field">
-            <label for="model-file">Local ONNX model</label>
-            <input id="model-file" type="file" accept=".onnx" disabled />
-          </div>
+          <section class="form-section form-section-advanced">
+            <div class="form-section-header">
+              <h2 class="form-section-title">Advanced</h2>
+            </div>
+            <div class="section-grid">
+              <div class="field field-span-2">
+                <label for="backend">Runtime backend</label>
+                <select id="backend">
+                  <option value="webgpu">WebGPU preferred</option>
+                  <option value="wasm">WASM CPU only</option>
+                </select>
+              </div>
+
+              <div class="pair-row field-span-2">
+                <div class="field">
+                  <label for="confidence">Confidence</label>
+                  <input id="confidence" type="number" min="0" max="1" step="0.01" value="0.10" />
+                </div>
+
+                <div class="field">
+                  <label for="iou">IoU</label>
+                  <input id="iou" type="number" min="0" max="1" step="0.01" value="0.50" />
+                </div>
+              </div>
+
+              <div class="field field-span-2">
+                <label>Frame rate</label>
+                <div class="pair-row">
+                  <div class="setting-card setting-card-compact">
+                    <label class="setting-toggle" for="native-fps">
+                      <input id="native-fps" type="checkbox" checked />
+                      <span class="setting-copy">
+                        <span class="setting-title">Use native fps</span>
+                      </span>
+                    </label>
+                  </div>
+
+                  <div class="field field-no-label" id="inference-fps-field">
+                    <input
+                      id="inference-fps"
+                      type="number"
+                      min="1"
+                      max="120"
+                      step="0.1"
+                      value="15"
+                      disabled
+                      aria-label="Inference FPS"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div class="field field-span-2">
+                <label>Model</label>
+                <div class="pair-row">
+                  <div class="setting-card setting-card-compact">
+                    <label class="setting-toggle" for="use-bundled-model">
+                      <input id="use-bundled-model" type="checkbox" checked />
+                      <span class="setting-copy">
+                        <span class="setting-title">Use bundled model</span>
+                      </span>
+                    </label>
+                  </div>
+
+                  <div class="field field-no-label" id="model-file-field">
+                    <input id="model-file" type="file" accept=".onnx" disabled />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
 
           <div class="action-row">
-            <button id="decode-button" type="button">Decode echogram</button>
-            <button id="run-button" type="button">Run segmentation</button>
+            <button id="decode-button" type="button">Generate Echogram</button>
+            <button id="run-button" type="button">Run TaRDIS</button>
           </div>
         </form>
 

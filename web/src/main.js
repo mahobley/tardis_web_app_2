@@ -22,14 +22,18 @@ const elements = {
   modelFile: document.querySelector("#model-file"),
   useBundledModel: document.querySelector("#use-bundled-model"),
   modelFileField: document.querySelector("#model-file-field"),
+  runAllFrames: document.querySelector("#run-all-frames"),
   startFrame: document.querySelector("#start-frame"),
+  startFrameField: document.querySelector("#start-frame-field"),
   endFrame: document.querySelector("#end-frame"),
-  upstreamDirection: document.querySelector("#upstream-direction"),
+  endFrameField: document.querySelector("#end-frame-field"),
+  upstreamDirectionInputs: [...document.querySelectorAll('input[name="upstream-direction"]')],
   backend: document.querySelector("#backend"),
   confidence: document.querySelector("#confidence"),
   iou: document.querySelector("#iou"),
   nativeFps: document.querySelector("#native-fps"),
   inferenceFps: document.querySelector("#inference-fps"),
+  inferenceFpsField: document.querySelector("#inference-fps-field"),
   decodeButton: document.querySelector("#decode-button"),
   runButton: document.querySelector("#run-button"),
   statusText: document.querySelector("#status-text"),
@@ -150,12 +154,27 @@ function startStatusTimer() {
 function syncModelFileState() {
   const disabled = elements.useBundledModel.checked || state.running;
   elements.modelFile.disabled = disabled;
-  elements.modelFileField.style.opacity = disabled ? "0.6" : "1";
+  elements.modelFileField.classList.toggle("disabled-field", disabled);
+}
+
+function syncFrameRangeState() {
+  const disabled = elements.runAllFrames.checked || state.running;
+  elements.startFrame.disabled = disabled;
+  elements.endFrame.disabled = disabled;
+  elements.startFrameField.classList.toggle("disabled-field", disabled);
+  elements.endFrameField.classList.toggle("disabled-field", disabled);
 }
 
 function syncInferenceFpsState() {
   const disabled = elements.nativeFps.checked || state.running;
   elements.inferenceFps.disabled = disabled;
+  elements.inferenceFpsField.classList.toggle("disabled-field", disabled);
+}
+
+function currentUpstreamDirection() {
+  return (
+    elements.upstreamDirectionInputs.find((input) => input.checked)?.value ?? "left"
+  );
 }
 
 function updateDownloadButtons() {
@@ -170,9 +189,10 @@ function updateDownloadButtons() {
 function setBusy(busy) {
   state.running = busy;
   elements.sonarFile.disabled = busy;
-  elements.startFrame.disabled = busy;
-  elements.endFrame.disabled = busy;
-  elements.upstreamDirection.disabled = busy;
+  elements.runAllFrames.disabled = busy;
+  for (const input of elements.upstreamDirectionInputs) {
+    input.disabled = busy;
+  }
   elements.backend.disabled = busy;
   elements.confidence.disabled = busy;
   elements.iou.disabled = busy;
@@ -180,6 +200,7 @@ function setBusy(busy) {
   elements.useBundledModel.disabled = busy;
   elements.decodeButton.disabled = busy;
   elements.runButton.disabled = busy;
+  syncFrameRangeState();
   syncModelFileState();
   syncInferenceFpsState();
   updateDownloadButtons();
@@ -537,7 +558,7 @@ async function ensureSession() {
 }
 
 function buildExportFiles() {
-  const upstreamDirection = elements.upstreamDirection.value;
+  const upstreamDirection = currentUpstreamDirection();
   const arisStem = currentArisStem();
   state.displayRows = buildDisplayRows(state.predictionRows, upstreamDirection);
   state.exportFiles = {
@@ -566,10 +587,10 @@ async function decodeSelectedFile() {
   state.sonarFile = file;
 
   const buffer = await file.arrayBuffer();
-  const startFrame = Number(elements.startFrame.value);
-  const endFrame = Number(elements.endFrame.value);
+  const startFrame = elements.runAllFrames.checked ? 0 : Number(elements.startFrame.value);
+  const endFrame = elements.runAllFrames.checked ? -1 : Number(elements.endFrame.value);
 
-  setStatus("Decoding sonar file in JavaScript...", 0);
+  setStatus("Generating echogram in JavaScript...", 0);
   const decoded = await decodeSonarBuffer(buffer, {
     startFrame,
     endFrame,
@@ -578,7 +599,7 @@ async function decodeSelectedFile() {
     returnAsBgr: true,
     onProgress(done, total) {
       const pct = total > 0 ? (done / total) * 100 : 0;
-      setStatus(`Decoding echogram... ${done}/${total} frames`, pct);
+      setStatus(`Generating echogram... ${done}/${total} frames`, pct);
     },
   });
 
@@ -617,7 +638,7 @@ async function decodeSelectedFile() {
   elements.overlayCanvas.height = 1;
   elements.overlayCanvas.classList.add("canvas-empty");
   updateDownloadButtons();
-  setStatus(`Decoded ${file.name}`, 100);
+  setStatus(`Generated echogram for ${file.name}`, 100);
   return decoded;
 }
 
@@ -787,16 +808,22 @@ elements.useBundledModel.addEventListener("change", () => {
   syncModelFileState();
 });
 
+elements.runAllFrames.addEventListener("change", () => {
+  syncFrameRangeState();
+});
+
 elements.nativeFps.addEventListener("change", () => {
   syncInferenceFpsState();
 });
 
-elements.upstreamDirection.addEventListener("change", () => {
-  if (!state.predictionRows.length) {
-    return;
-  }
-  buildExportFiles();
-});
+for (const input of elements.upstreamDirectionInputs) {
+  input.addEventListener("change", () => {
+    if (!state.predictionRows.length) {
+      return;
+    }
+    buildExportFiles();
+  });
+}
 
 elements.sonarFile.addEventListener("change", resetVisuals);
 
@@ -898,6 +925,7 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
+syncFrameRangeState();
 syncModelFileState();
 syncInferenceFpsState();
 updateDownloadButtons();

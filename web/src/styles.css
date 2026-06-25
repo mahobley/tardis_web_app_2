@@ -8,6 +8,7 @@
   --accent-2: #d97706;
   --line: rgba(31, 41, 51, 0.12);
   --shadow: 0 18px 50px rgba(31, 41, 51, 0.12);
+  --control-height: 52px;
   --font-sans: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", "SFMono-Regular", monospace;
 }
@@ -112,32 +113,64 @@ code {
   padding: 1.25rem;
 }
 
+.control-card {
+  display: grid;
+  gap: 1.6rem;
+}
+
 .viewer-card {
   padding: 1.1rem;
 }
 
-.field,
-.field-row {
+.form-section {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.95rem;
 }
 
-.field {
-  margin-bottom: 0.9rem;
+.form-section-header {
+  display: grid;
+  gap: 0;
 }
 
-.section-heading {
-  margin: 0.2rem 0 0.9rem;
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--accent);
+.form-section-title {
+  font-size: 1.15rem;
+  line-height: 1.05;
 }
 
-.field-row {
+.section-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 0.8rem;
+  gap: 1.25rem 0.9rem;
+}
+
+.field,
+.setting-card {
+  display: grid;
+  gap: 0.18rem;
+  align-content: start;
+}
+
+.field-span-2 {
+  grid-column: 1 / -1;
+}
+
+.pair-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+  align-items: start;
+}
+
+.frame-range-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.frame-range-separator {
+  color: var(--muted);
+  font-weight: 700;
+  line-height: 1;
 }
 
 label {
@@ -145,7 +178,7 @@ label {
   font-weight: 600;
 }
 
-input,
+input:not([type="checkbox"]):not([type="radio"]),
 select,
 button {
   width: 100%;
@@ -154,29 +187,123 @@ button {
   font: inherit;
 }
 
-input,
+input:not([type="checkbox"]):not([type="radio"]),
 select {
+  min-height: var(--control-height);
   padding: 0.85rem 0.95rem;
   background: rgba(255, 255, 255, 0.84);
   color: var(--ink);
 }
 
 input[type="file"] {
-  padding: 0.75rem;
+  padding: 0.7rem 0.9rem;
 }
 
-.checkbox-field {
+input:not([type="checkbox"]):not([type="radio"]):disabled,
+select:disabled {
+  border-color: rgba(31, 41, 51, 0.1);
+  background: rgba(226, 232, 240, 0.72);
+  color: rgba(31, 41, 51, 0.5);
+}
+
+.radio-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.radio-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: var(--control-height);
+  padding: 0.8rem 0.95rem;
+  border: 1px solid rgba(31, 41, 51, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.setting-card {
+  min-height: calc(var(--control-height) + 34px);
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(31, 41, 51, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.7);
   align-content: center;
 }
 
-.checkbox-field label {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
+.setting-card-compact {
+  min-height: var(--control-height);
+  padding: 0.65rem 1rem;
 }
 
-.checkbox-field input {
+.setting-toggle {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.8rem;
+  align-items: center;
+  color: var(--ink);
+}
+
+.setting-card-compact .setting-toggle {
+  align-items: center;
+}
+
+.setting-toggle input,
+.radio-option input {
   width: auto;
+  margin: 0;
+}
+
+.setting-card-compact .setting-toggle input {
+  margin-top: 0;
+}
+
+.setting-copy {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.setting-title {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.setting-note {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.disabled-field {
+  opacity: 1;
+}
+
+.disabled-field label,
+.disabled-field .setting-title {
+  color: rgba(31, 41, 51, 0.62);
+}
+
+.disabled-field .setting-note {
+  color: rgba(93, 107, 119, 0.72);
+}
+
+.disabled-field.setting-card,
+.disabled-field {
+  position: relative;
+}
+
+.disabled-field.setting-card {
+  background: rgba(240, 244, 248, 0.7);
+  border-style: dashed;
+}
+
+.disabled-field.field input,
+.disabled-field.field select {
+  background: rgba(226, 232, 240, 0.72);
 }
 
 .action-row {
@@ -393,9 +520,28 @@ code {
 @media (max-width: 960px) {
   .control-grid,
   .viewer-grid,
-  .field-row,
   .action-row {
     grid-template-columns: 1fr;
+  }
+
+  .section-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pair-row {
+    grid-template-columns: 1fr;
+  }
+
+  .frame-range-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .frame-range-separator {
+    justify-self: center;
+  }
+
+  .field-span-2 {
+    grid-column: auto;
   }
 
   .viewer-header {
