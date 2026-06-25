@@ -14,7 +14,7 @@ import {
 } from "./detections/exports.js";
 import { createSegmentationSession, defaultModelUrl, runYoloSegmentation } from "./inference/yoloSegmentation.js";
 import { rgbToImageData } from "./render/imageData.js";
-import { makeOverlayImage } from "./render/overlay.js";
+import { makeOverlayImage, makeOverlayImageFromRgb } from "./render/overlay.js";
 import { makeEchogramVisualFromBgr } from "./render/visualizeEchogram.js";
 import { bgrToRgbImage, decodeSonarBuffer } from "./sonar/decoder.js";
 
@@ -358,33 +358,15 @@ function currentUpstreamDirection() {
   return elements.upstreamDirectionInputs.find((input) => input.checked)?.value ?? "left";
 }
 
-function computeAutoInferenceTargets(width, height, allowWidthAdjust, allowHeightAdjust) {
+function computeAutoInferenceTargets(width, height) {
   const pixelCount = width * height;
   if (pixelCount <= MAX_BROWSER_INFERENCE_PIXELS) {
     return null;
   }
-  if (!allowWidthAdjust && !allowHeightAdjust) {
-    return null;
-  }
-
-  if (allowWidthAdjust && allowHeightAdjust) {
-    const scale = Math.sqrt(MAX_BROWSER_INFERENCE_PIXELS / pixelCount);
-    return {
-      width: Math.max(1, Math.floor(width * scale)),
-      height: Math.max(1, Math.floor(height * scale)),
-    };
-  }
-
-  if (allowWidthAdjust) {
-    return {
-      width: Math.max(1, Math.floor(MAX_BROWSER_INFERENCE_PIXELS / height)),
-      height,
-    };
-  }
-
+  const scale = Math.sqrt(MAX_BROWSER_INFERENCE_PIXELS / pixelCount);
   return {
-    width,
-    height: Math.max(1, Math.floor(MAX_BROWSER_INFERENCE_PIXELS / width)),
+    width: Math.max(1, Math.floor(width * scale)),
+    height: Math.max(1, Math.floor(height * scale)),
   };
 }
 
@@ -870,12 +852,7 @@ async function runSegmentation() {
     usedNativeBins = inferenceHeight === decoded.height;
   }
 
-  const autoTargets = computeAutoInferenceTargets(
-    inferenceWidth,
-    inferenceHeight,
-    elements.nativeFps.checked,
-    elements.nativeBins.checked,
-  );
+  const autoTargets = computeAutoInferenceTargets(inferenceWidth, inferenceHeight);
   if (autoTargets) {
     preAutoFrameRate = achievedFrameRate;
     preAutoNumBins = inferenceHeight;
@@ -884,24 +861,28 @@ async function runSegmentation() {
       15,
     );
 
-    if (elements.nativeFps.checked && autoTargets.width < inferenceWidth) {
-      const autoGoalFrameRate = nativeFrameRate * (autoTargets.width / decoded.width);
+    if (autoTargets.width < inferenceWidth) {
+      const priorFrameIndices = frameIndices;
+      const autoGoalFrameRate = achievedFrameRate * (autoTargets.width / inferenceWidth);
       const autoDownsampled = downsampleRgbForInference(
         inferenceRgbImage,
         inferenceWidth,
         inferenceHeight,
         autoGoalFrameRate,
-        nativeFrameRate,
+        achievedFrameRate,
       );
       inferenceRgbImage = autoDownsampled.rgbImage;
       inferenceWidth = autoDownsampled.width;
-      frameIndices = autoDownsampled.frameIndices;
+      frameIndices = Uint32Array.from(
+        autoDownsampled.frameIndices,
+        (index) => priorFrameIndices[index],
+      );
       achievedFrameRate = autoDownsampled.achievedFrameRate;
       usedNativeFps = false;
       autoDownsampledForBrowser = true;
     }
 
-    if (elements.nativeBins.checked && autoTargets.height < inferenceHeight) {
+    if (autoTargets.height < inferenceHeight) {
       const autoResized = resizeRgbHeightForInference(
         inferenceRgbImage,
         inferenceWidth,
@@ -941,8 +922,8 @@ async function runSegmentation() {
       rgbImage: inferenceRgbImage,
       width: inferenceWidth,
       height: inferenceHeight,
-      outputWidth: decoded.width,
-      outputHeight: decoded.height,
+      outputWidth: inferenceWidth,
+      outputHeight: inferenceHeight,
       confidence: Number(elements.confidence.value),
       iouThreshold: Number(elements.iou.value),
     });
@@ -956,7 +937,15 @@ async function runSegmentation() {
     throw error;
   }
 
-  const overlayImage = makeOverlayImage(decoded.imageBgr, decoded.width, decoded.height, result.detections);
+  const overlayImage =
+    usedNativeFps && usedNativeBins
+      ? makeOverlayImage(decoded.imageBgr, decoded.width, decoded.height, result.detections)
+      : makeOverlayImageFromRgb(
+          inferenceRgbImage,
+          inferenceWidth,
+          inferenceHeight,
+          result.detections,
+        );
   state.overlayImage = overlayImage;
   state.detections = result.detections;
   state.predictionRows = buildPredictionRows(
