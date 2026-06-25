@@ -394,6 +394,8 @@ function setBusy(busy) {
   elements.nativeFps.disabled = busy;
   elements.nativeBins.disabled = busy;
   elements.useBundledModel.disabled = busy;
+  elements.advancedReset.disabled = busy;
+  elements.advancedToggle.disabled = busy;
   elements.decodeButton.disabled = busy;
   elements.runButton.disabled = busy;
   syncFrameRangeState();
@@ -442,9 +444,15 @@ function buildDecodedSummary(decoded) {
   return parts.join(", ");
 }
 
-function buildZoomCoordsText(imageX, imageY, imageHeight) {
+function buildZoomCoordsText(sourceCanvas, imageX, imageY, imageHeight) {
   const frameStart = state.decoded?.frameRange?.start ?? 0;
-  const frameNumber = frameStart + imageX;
+  let frameNumber = frameStart + imageX;
+  if (sourceCanvas === elements.overlayCanvas) {
+    const mappedFrameNumber = state.frameIndices?.[imageX];
+    if (Number.isFinite(mappedFrameNumber)) {
+      frameNumber = Math.round(mappedFrameNumber);
+    }
+  }
   const metadata = state.decoded?.metadata ?? null;
   const windowStart = asFiniteNumber(metadata?.windowstart);
   const windowLength = asFiniteNumber(metadata?.windowlength);
@@ -618,7 +626,7 @@ function renderZoomPopup(sourceCanvas, title, imageX, imageY, clientX, clientY) 
   zoomCtx.stroke();
 
   elements.zoomTitle.textContent = title;
-  elements.zoomCoords.textContent = `${buildZoomCoordsText(imageX, imageY, sourceCanvas.height)} | ${sampleWidth} px | +/-`;
+  elements.zoomCoords.textContent = `${buildZoomCoordsText(sourceCanvas, imageX, imageY, sourceCanvas.height)} | ${sampleWidth} px | +/-`;
   elements.zoomPopup.hidden = false;
 
   const popupWidth = elements.zoomPopup.offsetWidth || 624;
@@ -809,7 +817,10 @@ async function runSegmentation() {
   let inferenceRgbImage = state.rgbImage;
   let inferenceWidth = decoded.width;
   let inferenceHeight = decoded.height;
-  let frameIndices = Uint32Array.from({ length: decoded.width }, (_, index) => index);
+  let frameIndices = Uint32Array.from(
+    { length: decoded.width },
+    (_, index) => decoded.frameRange.start + index,
+  );
   let achievedFrameRate = nativeFrameRate;
   let usedNativeFps = true;
   let usedNativeBins = true;
