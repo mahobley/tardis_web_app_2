@@ -317,6 +317,38 @@ export function downsampleRgbForInference(
   };
 }
 
+export function resizeRgbHeightForInference(rgbImage, width, height, goalHeight) {
+  if (
+    !Number.isFinite(goalHeight) ||
+    goalHeight <= 0 ||
+    !Number.isInteger(goalHeight) ||
+    goalHeight >= height
+  ) {
+    return {
+      rgbImage,
+      width,
+      height,
+    };
+  }
+
+  const resized = new Uint8ClampedArray(width * goalHeight * 3);
+  for (let targetY = 0; targetY < goalHeight; targetY += 1) {
+    const sourceY = Math.max(
+      0,
+      Math.min(height - 1, Math.round((((targetY + 0.5) * height) / goalHeight) - 0.5)),
+    );
+    const sourceRowBase = sourceY * width * 3;
+    const targetRowBase = targetY * width * 3;
+    resized.set(rgbImage.subarray(sourceRowBase, sourceRowBase + width * 3), targetRowBase);
+  }
+
+  return {
+    rgbImage: resized,
+    width,
+    height: goalHeight,
+  };
+}
+
 function mapFrameCoordinateToOriginal(coord, frameIndices) {
   if (!frameIndices || frameIndices.length === 0) {
     return Number.NaN;
@@ -334,6 +366,23 @@ function mapFrameCoordinateToOriginal(coord, frameIndices) {
   }
   const frac = coord - lo;
   return Number(frameIndices[lo]) * (1 - frac) + Number(frameIndices[hi]) * frac;
+}
+
+function mapAxisCoordinateToOriginal(coord, sourceSize, targetSize) {
+  if (
+    !Number.isFinite(coord) ||
+    !Number.isFinite(sourceSize) ||
+    !Number.isFinite(targetSize) ||
+    sourceSize <= 0 ||
+    targetSize <= 0
+  ) {
+    return Number.NaN;
+  }
+  if (sourceSize === targetSize) {
+    return coord;
+  }
+  const mapped = (((coord + 0.5) * targetSize) / sourceSize) - 0.5;
+  return Math.max(0, Math.min(targetSize - 1, mapped));
 }
 
 function maskHorizontalExtentAndCentroid(mask, width, height) {
@@ -468,6 +517,7 @@ export function buildPredictionRows(
   detections,
   echogramMetadata,
   frameIndices = null,
+  originalHeight = null,
 ) {
   const rows = [];
   const mappedFrameIndices = frameIndices && frameIndices.length > 0 ? frameIndices : null;
@@ -490,6 +540,13 @@ export function buildPredictionRows(
       endBinY,
     ] = maskHorizontalExtentAndCentroid(mask, width, height);
 
+    let mappedCenterFrameBin = centerFrameBin;
+    let mappedMinimumBinY = minimumBinY;
+    let mappedMaximumBinY = maximumBinY;
+    let mappedAverageBinY = averageBinY;
+    let mappedStartBinY = startBinY;
+    let mappedEndBinY = endBinY;
+
     let mappedEnterFrame = enterFrame;
     let mappedExitFrame = exitFrame;
     let mappedCenterFrame = centerFrame;
@@ -501,12 +558,21 @@ export function buildPredictionRows(
       mappedDuration = Math.round(mappedExitFrame) - Math.round(mappedEnterFrame) + 1;
     }
 
-    const centerFrameDistance = convertBinToM(centerFrameBin, echogramMetadata);
-    const startDistance = convertBinToM(startBinY, echogramMetadata);
-    const endDistance = convertBinToM(endBinY, echogramMetadata);
-    const minimumDistance = convertBinToM(minimumBinY, echogramMetadata);
-    const maximumDistance = convertBinToM(maximumBinY, echogramMetadata);
-    const averageDistance = convertBinToM(averageBinY, echogramMetadata);
+    if (originalHeight !== null && originalHeight !== height) {
+      mappedCenterFrameBin = mapAxisCoordinateToOriginal(centerFrameBin, height, originalHeight);
+      mappedMinimumBinY = mapAxisCoordinateToOriginal(minimumBinY, height, originalHeight);
+      mappedMaximumBinY = mapAxisCoordinateToOriginal(maximumBinY, height, originalHeight);
+      mappedAverageBinY = mapAxisCoordinateToOriginal(averageBinY, height, originalHeight);
+      mappedStartBinY = mapAxisCoordinateToOriginal(startBinY, height, originalHeight);
+      mappedEndBinY = mapAxisCoordinateToOriginal(endBinY, height, originalHeight);
+    }
+
+    const centerFrameDistance = convertBinToM(mappedCenterFrameBin, echogramMetadata);
+    const startDistance = convertBinToM(mappedStartBinY, echogramMetadata);
+    const endDistance = convertBinToM(mappedEndBinY, echogramMetadata);
+    const minimumDistance = convertBinToM(mappedMinimumBinY, echogramMetadata);
+    const maximumDistance = convertBinToM(mappedMaximumBinY, echogramMetadata);
+    const averageDistance = convertBinToM(mappedAverageBinY, echogramMetadata);
 
     rows.push({
       instance_index: roundInt(index),
@@ -516,14 +582,14 @@ export function buildPredictionRows(
       enter_frame: roundInt(mappedEnterFrame),
       exit_frame: roundInt(mappedExitFrame),
       center_frame: roundInt(mappedCenterFrame),
-      center_frame_bin: roundInt(centerFrameBin),
+      center_frame_bin: roundInt(mappedCenterFrameBin),
       center_frame_distance: roundDecimal(centerFrameDistance, 2),
       duration: roundInt(mappedDuration),
-      minimum_bin_y: roundInt(minimumBinY),
-      maximum_bin_y: roundInt(maximumBinY),
-      average_bin_y: roundInt(averageBinY),
-      start_bin_y: roundInt(startBinY),
-      end_bin_y: roundInt(endBinY),
+      minimum_bin_y: roundInt(mappedMinimumBinY),
+      maximum_bin_y: roundInt(mappedMaximumBinY),
+      average_bin_y: roundInt(mappedAverageBinY),
+      start_bin_y: roundInt(mappedStartBinY),
+      end_bin_y: roundInt(mappedEndBinY),
       minimum_distance: roundDecimal(minimumDistance, 2),
       maximum_distance: roundDecimal(maximumDistance, 2),
       average_distance: roundDecimal(averageDistance, 2),

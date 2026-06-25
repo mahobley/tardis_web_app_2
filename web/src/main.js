@@ -10,6 +10,7 @@ import {
   formatPredictionCsv,
   framerateFromMetadata,
   headerFramerateFromMetadata,
+  resizeRgbHeightForInference,
 } from "./detections/exports.js";
 import { createSegmentationSession, defaultModelUrl, runYoloSegmentation } from "./inference/yoloSegmentation.js";
 import { rgbToImageData } from "./render/imageData.js";
@@ -36,6 +37,9 @@ const elements = {
   nativeFps: document.querySelector("#native-fps"),
   inferenceFps: document.querySelector("#inference-fps"),
   inferenceFpsField: document.querySelector("#inference-fps-field"),
+  nativeBins: document.querySelector("#native-bins"),
+  inferenceBins: document.querySelector("#inference-bins"),
+  inferenceBinsField: document.querySelector("#inference-bins-field"),
   decodeButton: document.querySelector("#decode-button"),
   runButton: document.querySelector("#run-button"),
   statusText: document.querySelector("#status-text"),
@@ -76,6 +80,8 @@ const state = {
   frameIndices: null,
   inferenceFrameRate: null,
   inferenceUsedNativeFps: true,
+  inferenceNumBins: null,
+  inferenceUsedNativeBins: true,
   exportFiles: {
     csvName: null,
     csvText: null,
@@ -136,9 +142,7 @@ function stopStatusTimer(finalLabel = "Time") {
   }
   if (state.timerStartMs !== null) {
     elements.statusTimeLabel.textContent = finalLabel;
-    elements.statusTimeValue.textContent = formatElapsedTime(
-      performance.now() - state.timerStartMs,
-    );
+    elements.statusTimeValue.textContent = formatElapsedTime(performance.now() - state.timerStartMs);
     state.timerStartMs = null;
   } else if (finalLabel === "Time") {
     elements.statusTimeLabel.textContent = "Time";
@@ -155,9 +159,7 @@ function startStatusTimer() {
     if (state.timerStartMs === null) {
       return;
     }
-    elements.statusTimeValue.textContent = formatElapsedTime(
-      performance.now() - state.timerStartMs,
-    );
+    elements.statusTimeValue.textContent = formatElapsedTime(performance.now() - state.timerStartMs);
   }, 100);
 }
 
@@ -181,16 +183,18 @@ function syncInferenceFpsState() {
   elements.inferenceFpsField.classList.toggle("disabled-field", disabled);
 }
 
+function syncInferenceBinsState() {
+  const disabled = elements.nativeBins.checked || state.running;
+  elements.inferenceBins.disabled = disabled;
+  elements.inferenceBinsField.classList.toggle("disabled-field", disabled);
+}
+
 function syncRunButtonLabel() {
-  elements.runButton.textContent = state.decoded
-    ? "Run TaRDIS"
-    : "Generate Echogram + Run TaRDIS";
+  elements.runButton.textContent = state.decoded ? "Run TaRDIS" : "Generate Echogram + Run TaRDIS";
 }
 
 function currentUpstreamDirection() {
-  return (
-    elements.upstreamDirectionInputs.find((input) => input.checked)?.value ?? "left"
-  );
+  return elements.upstreamDirectionInputs.find((input) => input.checked)?.value ?? "left";
 }
 
 function updateDownloadButtons() {
@@ -215,12 +219,14 @@ function setBusy(busy) {
   elements.confidence.disabled = busy;
   elements.iou.disabled = busy;
   elements.nativeFps.disabled = busy;
+  elements.nativeBins.disabled = busy;
   elements.useBundledModel.disabled = busy;
   elements.decodeButton.disabled = busy;
   elements.runButton.disabled = busy;
   syncFrameRangeState();
   syncModelFileState();
   syncInferenceFpsState();
+  syncInferenceBinsState();
   updateDownloadButtons();
 }
 
@@ -270,11 +276,7 @@ function buildZoomCoordsText(imageX, imageY, imageHeight) {
   const windowStart = asFiniteNumber(metadata?.windowstart);
   const windowLength = asFiniteNumber(metadata?.windowlength);
 
-  if (
-    windowStart !== null &&
-    windowLength !== null &&
-    imageHeight > 1
-  ) {
+  if (windowStart !== null && windowLength !== null && imageHeight > 1) {
     const percentUp = (imageHeight - 1 - imageY) / (imageHeight - 1);
     const distance = windowStart + percentUp * windowLength;
     return `frame ${frameNumber} | distance ${distance.toFixed(2)}m`;
@@ -296,9 +298,7 @@ function renderMeta(decoded) {
     ["Num frames", String(info.numframes)],
   ];
 
-  elements.metaList.innerHTML = entries
-    .map(([label, value]) => `<dt>${label}</dt><dd>${value}</dd>`)
-    .join("");
+  elements.metaList.innerHTML = entries.map(([label, value]) => `<dt>${label}</dt><dd>${value}</dd>`).join("");
 }
 
 function drawImageDataToCanvas(canvas, imageData) {
@@ -342,16 +342,20 @@ function renderOverlayPreview(
   achievedFrameRate,
   usedNativeFps,
   nativeHeaderFrameRate,
+  inferenceNumBins,
+  usedNativeBins,
 ) {
   state.overlayImageData = imageData;
   drawImageDataToCanvas(elements.overlayCanvas, imageData);
-  const nativeDisplayRate =
-    nativeHeaderFrameRate ?? achievedFrameRate;
+  const nativeDisplayRate = nativeHeaderFrameRate ?? achievedFrameRate;
   const fpsSummary = usedNativeFps
     ? `native ${nativeDisplayRate.toFixed(2)} fps`
     : `${achievedFrameRate.toFixed(2)} fps`;
+  const binsSummary = usedNativeBins
+    ? `native ${inferenceNumBins} bins`
+    : `${inferenceNumBins} bins`;
   elements.overlaySummary.textContent =
-    `${detections.length} detections rendered | inference fps ${fpsSummary}`;
+    `${detections.length} detections rendered | inference: ${fpsSummary} | ${binsSummary}`;
   updateDownloadButtons();
 }
 
@@ -365,14 +369,9 @@ function renderDetectionsTable(displayRows, detections) {
 
   const counts = new Map();
   for (const detection of detections) {
-    counts.set(
-      detection.className,
-      (counts.get(detection.className) ?? 0) + 1,
-    );
+    counts.set(detection.className, (counts.get(detection.className) ?? 0) + 1);
   }
-  elements.countsSummary.textContent = [...counts.entries()]
-    .map(([name, count]) => `${name}: ${count}`)
-    .join("  |  ");
+  elements.countsSummary.textContent = [...counts.entries()].map(([name, count]) => `${name}: ${count}`).join("  |  ");
 
   elements.detectionsBody.innerHTML = displayRows
     .map((row) => {
@@ -406,14 +405,8 @@ function renderZoomPopup(sourceCanvas, title, imageX, imageY, clientX, clientY) 
   const halfRegion = Math.floor(zoomRegionSize / 2);
   let sourceX = imageX - halfRegion;
   let sourceY = imageY - halfRegion;
-  sourceX = Math.max(
-    0,
-    Math.min(sourceCanvas.width - zoomRegionSize, sourceX),
-  );
-  sourceY = Math.max(
-    0,
-    Math.min(sourceCanvas.height - zoomRegionSize, sourceY),
-  );
+  sourceX = Math.max(0, Math.min(sourceCanvas.width - zoomRegionSize, sourceX));
+  sourceY = Math.max(0, Math.min(sourceCanvas.height - zoomRegionSize, sourceY));
   if (sourceCanvas.width < zoomRegionSize) {
     sourceX = 0;
   }
@@ -440,12 +433,8 @@ function renderZoomPopup(sourceCanvas, title, imageX, imageY, clientX, clientY) 
     ZOOM_CANVAS_SIZE,
   );
 
-  const centerX = Math.round(
-    ((imageX - sourceX) / Math.max(1, sampleWidth)) * ZOOM_CANVAS_SIZE,
-  );
-  const centerY = Math.round(
-    ((imageY - sourceY) / Math.max(1, sampleHeight)) * ZOOM_CANVAS_SIZE,
-  );
+  const centerX = Math.round(((imageX - sourceX) / Math.max(1, sampleWidth)) * ZOOM_CANVAS_SIZE);
+  const centerY = Math.round(((imageY - sourceY) / Math.max(1, sampleHeight)) * ZOOM_CANVAS_SIZE);
   zoomCtx.strokeStyle = "rgba(255,255,255,0.9)";
   zoomCtx.lineWidth = 1;
   zoomCtx.beginPath();
@@ -456,24 +445,15 @@ function renderZoomPopup(sourceCanvas, title, imageX, imageY, clientX, clientY) 
   zoomCtx.stroke();
 
   elements.zoomTitle.textContent = title;
-  elements.zoomCoords.textContent =
-    `${buildZoomCoordsText(imageX, imageY, sourceCanvas.height)} | ${sampleWidth} px | +/-`;
+  elements.zoomCoords.textContent = `${buildZoomCoordsText(imageX, imageY, sourceCanvas.height)} | ${sampleWidth} px | +/-`;
   elements.zoomPopup.hidden = false;
 
   const popupWidth = elements.zoomPopup.offsetWidth || 624;
   const popupHeight = elements.zoomPopup.offsetHeight || 260;
   const preferLeftSide = clientX > window.innerWidth / 2;
-  const preferredLeft = preferLeftSide
-    ? clientX - popupWidth - 20
-    : clientX + 20;
-  const left = Math.max(
-    12,
-    Math.min(window.innerWidth - popupWidth - 12, preferredLeft),
-  );
-  const top = Math.min(
-    window.innerHeight - popupHeight - 12,
-    Math.max(12, clientY + 20),
-  );
+  const preferredLeft = preferLeftSide ? clientX - popupWidth - 20 : clientX + 20;
+  const left = Math.max(12, Math.min(window.innerWidth - popupWidth - 12, preferredLeft));
+  const top = Math.min(window.innerHeight - popupHeight - 12, Math.max(12, clientY + 20));
   elements.zoomPopup.style.left = `${left}px`;
   elements.zoomPopup.style.top = `${top}px`;
 }
@@ -506,17 +486,8 @@ function updateZoomPopup(sourceCanvas, title, event) {
 
   const xRatio = sourceCanvas.width / rect.width;
   const yRatio = sourceCanvas.height / rect.height;
-  const imageX = Math.max(
-    0,
-    Math.min(sourceCanvas.width - 1, Math.floor((event.clientX - rect.left) * xRatio)),
-  );
-  const imageY = Math.max(
-    0,
-    Math.min(
-      sourceCanvas.height - 1,
-      Math.floor((event.clientY - rect.top) * yRatio),
-    ),
-  );
+  const imageX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.floor((event.clientX - rect.left) * xRatio)));
+  const imageY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.floor((event.clientY - rect.top) * yRatio)));
 
   state.zoom.sourceCanvas = sourceCanvas;
   state.zoom.title = title;
@@ -622,11 +593,7 @@ async function decodeSelectedFile() {
   });
 
   const rgbImage = bgrToRgbImage(decoded.imageBgr);
-  const visualRgbImage = makeEchogramVisualFromBgr(
-    decoded.imageBgr,
-    decoded.width,
-    decoded.height,
-  );
+  const visualRgbImage = makeEchogramVisualFromBgr(decoded.imageBgr, decoded.width, decoded.height);
   state.decoded = decoded;
   state.rgbImage = rgbImage;
   state.visualRgbImage = visualRgbImage;
@@ -651,8 +618,7 @@ async function decodeSelectedFile() {
   syncRunButtonLabel();
   elements.overlaySummary.textContent = "Run inference to populate this panel.";
   elements.countsSummary.textContent = "No detections yet.";
-  elements.detectionsBody.innerHTML =
-    '<tr><td colspan="5">No detections yet.</td></tr>';
+  elements.detectionsBody.innerHTML = '<tr><td colspan="5">No detections yet.</td></tr>';
   elements.overlayCanvas.width = 1;
   elements.overlayCanvas.height = 1;
   elements.overlayCanvas.classList.add("canvas-empty");
@@ -665,14 +631,15 @@ async function runSegmentation() {
   const decoded = state.decoded ?? (await decodeSelectedFile());
   const nativeHeaderFrameRate = headerFramerateFromMetadata(decoded.metadata);
   const session = await ensureSession();
-  const nativeFrameRate =
-    nativeHeaderFrameRate ?? framerateFromMetadata(decoded.metadata);
+  const nativeFrameRate = nativeHeaderFrameRate ?? framerateFromMetadata(decoded.metadata);
 
   let inferenceRgbImage = state.rgbImage;
   let inferenceWidth = decoded.width;
+  let inferenceHeight = decoded.height;
   let frameIndices = Uint32Array.from({ length: decoded.width }, (_, index) => index);
   let achievedFrameRate = nativeFrameRate;
   let usedNativeFps = true;
+  let usedNativeBins = true;
 
   if (!elements.nativeFps.checked) {
     const goalFrameRate = Number(elements.inferenceFps.value);
@@ -693,34 +660,48 @@ async function runSegmentation() {
     usedNativeFps = inferenceWidth === decoded.width;
   }
 
+  if (!elements.nativeBins.checked) {
+    const goalNumBins = Number(elements.inferenceBins.value);
+    if (!Number.isFinite(goalNumBins) || goalNumBins <= 0 || !Number.isInteger(goalNumBins)) {
+      throw new Error("Num bins must be a positive integer");
+    }
+    const resized = resizeRgbHeightForInference(
+      inferenceRgbImage,
+      inferenceWidth,
+      inferenceHeight,
+      goalNumBins,
+    );
+    inferenceRgbImage = resized.rgbImage;
+    inferenceHeight = resized.height;
+    usedNativeBins = inferenceHeight === decoded.height;
+  }
+
   state.frameIndices = frameIndices;
   state.inferenceFrameRate = achievedFrameRate;
   state.inferenceUsedNativeFps = usedNativeFps;
+  state.inferenceNumBins = inferenceHeight;
+  state.inferenceUsedNativeBins = usedNativeBins;
 
   setStatus("Running ONNX segmentation...", 20);
   const result = await runYoloSegmentation({
     session,
     rgbImage: inferenceRgbImage,
     width: inferenceWidth,
-    height: decoded.height,
+    height: inferenceHeight,
     outputWidth: decoded.width,
     outputHeight: decoded.height,
     confidence: Number(elements.confidence.value),
     iouThreshold: Number(elements.iou.value),
   });
 
-  const overlayImage = makeOverlayImage(
-    decoded.imageBgr,
-    decoded.width,
-    decoded.height,
-    result.detections,
-  );
+  const overlayImage = makeOverlayImage(decoded.imageBgr, decoded.width, decoded.height, result.detections);
   state.overlayImage = overlayImage;
   state.detections = result.detections;
   state.predictionRows = buildPredictionRows(
     result.detections,
     decoded.metadata,
     frameIndices,
+    decoded.height,
   );
   buildExportFiles();
   renderOverlayPreview(
@@ -729,6 +710,8 @@ async function runSegmentation() {
     achievedFrameRate,
     usedNativeFps,
     nativeHeaderFrameRate,
+    inferenceHeight,
+    usedNativeBins,
   );
   setStatus(`Inference finished with ${result.detections.length} detections`, 100);
 }
@@ -750,6 +733,8 @@ function resetVisuals() {
   state.frameIndices = null;
   state.inferenceFrameRate = null;
   state.inferenceUsedNativeFps = true;
+  state.inferenceNumBins = null;
+  state.inferenceUsedNativeBins = true;
   state.exportFiles = {
     csvName: null,
     csvText: null,
@@ -762,8 +747,7 @@ function resetVisuals() {
   elements.decodedSummary.textContent = "No file decoded yet.";
   elements.overlaySummary.textContent = "Run inference to populate this panel.";
   elements.countsSummary.textContent = "No detections yet.";
-  elements.detectionsBody.innerHTML =
-    '<tr><td colspan="5">No detections yet.</td></tr>';
+  elements.detectionsBody.innerHTML = '<tr><td colspan="5">No detections yet.</td></tr>';
   elements.decodedCanvas.width = 1;
   elements.decodedCanvas.height = 1;
   elements.decodedCanvas.classList.add("canvas-empty");
@@ -794,13 +778,17 @@ async function runWithBusyState(task) {
 
 async function canvasToBlob(canvas, type = "image/png", quality) {
   return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        reject(new Error("Failed to create image download"));
-        return;
-      }
-      resolve(blob);
-    }, type, quality);
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("Failed to create image download"));
+          return;
+        }
+        resolve(blob);
+      },
+      type,
+      quality,
+    );
   });
 }
 
@@ -841,6 +829,10 @@ elements.nativeFps.addEventListener("change", () => {
   syncInferenceFpsState();
 });
 
+elements.nativeBins.addEventListener("change", () => {
+  syncInferenceBinsState();
+});
+
 elements.advancedToggle.addEventListener("click", () => {
   setAdvancedExpanded(elements.advancedContent.hidden);
 });
@@ -878,10 +870,7 @@ elements.runButton.addEventListener("click", async () => {
 
 elements.downloadDecodedButton.addEventListener("click", async () => {
   try {
-    await downloadCanvasPng(
-      elements.decodedCanvas,
-      `${currentCsvBaseName()}_decoded.png`,
-    );
+    await downloadCanvasPng(elements.decodedCanvas, `${currentCsvBaseName()}_decoded.png`);
   } catch (error) {
     setStatus(`Error: ${error.message}`, 0);
   }
@@ -889,10 +878,7 @@ elements.downloadDecodedButton.addEventListener("click", async () => {
 
 elements.downloadOverlayButton.addEventListener("click", async () => {
   try {
-    await downloadCanvasPng(
-      elements.overlayCanvas,
-      `${currentCsvBaseName()}_overlay.png`,
-    );
+    await downloadCanvasPng(elements.overlayCanvas, `${currentCsvBaseName()}_overlay.png`);
   } catch (error) {
     setStatus(`Error: ${error.message}`, 0);
   }
@@ -900,10 +886,7 @@ elements.downloadOverlayButton.addEventListener("click", async () => {
 
 elements.downloadDecodedJpgButton.addEventListener("click", async () => {
   try {
-    await downloadCanvasJpg(
-      elements.decodedCanvas,
-      `${currentCsvBaseName()}_decoded.jpg`,
-    );
+    await downloadCanvasJpg(elements.decodedCanvas, `${currentCsvBaseName()}_decoded.jpg`);
   } catch (error) {
     setStatus(`Error: ${error.message}`, 0);
   }
@@ -911,10 +894,7 @@ elements.downloadDecodedJpgButton.addEventListener("click", async () => {
 
 elements.downloadOverlayJpgButton.addEventListener("click", async () => {
   try {
-    await downloadCanvasJpg(
-      elements.overlayCanvas,
-      `${currentCsvBaseName()}_overlay.jpg`,
-    );
+    await downloadCanvasJpg(elements.overlayCanvas, `${currentCsvBaseName()}_overlay.jpg`);
   } catch (error) {
     setStatus(`Error: ${error.message}`, 0);
   }
@@ -934,10 +914,7 @@ elements.downloadFcButton.addEventListener("click", () => {
 
 elements.downloadEchotasticButton.addEventListener("click", () => {
   if (state.exportFiles.echotasticText && state.exportFiles.echotasticName) {
-    downloadTextFile(
-      state.exportFiles.echotasticName,
-      state.exportFiles.echotasticText,
-    );
+    downloadTextFile(state.exportFiles.echotasticName, state.exportFiles.echotasticText);
   }
 });
 
@@ -950,9 +927,7 @@ window.addEventListener("keydown", (event) => {
   }
   if (
     event.target instanceof HTMLElement &&
-    (event.target.tagName === "INPUT" ||
-      event.target.tagName === "SELECT" ||
-      event.target.tagName === "TEXTAREA")
+    (event.target.tagName === "INPUT" || event.target.tagName === "SELECT" || event.target.tagName === "TEXTAREA")
   ) {
     return;
   }
@@ -979,6 +954,7 @@ window.addEventListener("keydown", (event) => {
 syncFrameRangeState();
 syncModelFileState();
 syncInferenceFpsState();
+syncInferenceBinsState();
 setAdvancedExpanded(false);
 syncRunButtonLabel();
 updateDownloadButtons();

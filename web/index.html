@@ -120,6 +120,32 @@
                 </div>
               </div>
 
+              <div class="field field-span-2">
+                <label>Num bins</label>
+                <div class="pair-row">
+                  <div class="setting-card setting-card-compact">
+                    <label class="setting-toggle" for="native-bins">
+                      <input id="native-bins" type="checkbox" checked />
+                      <span class="setting-copy">
+                        <span class="setting-title">Use native bins</span>
+                      </span>
+                    </label>
+                  </div>
+
+                  <div class="field field-no-label" id="inference-bins-field">
+                    <input
+                      id="inference-bins"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value="128"
+                      disabled
+                      aria-label="Num bins"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div class="pair-row field-span-2">
                 <div class="field">
                   <label for="confidence">Confidence</label>
