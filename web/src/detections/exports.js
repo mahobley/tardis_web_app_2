@@ -1,5 +1,5 @@
 const FC_TITLE = "*** Manual Marking (Manual Sizing: Q = Quality, N = Repeat Count) ***";
-const FC_COMMENT = "TaRDIS";
+const FC_COMMENT_PREFIX = "TaRDIS-conf=";
 const ECHOTASTIC_VERSION = "2.0";
 const ECHOTASTIC_OPERATOR = "AUT";
 
@@ -25,7 +25,7 @@ const FC_SCHEMA = {
   Motion: { width: 39, default: "Running <-->" },
   Q: { width: 7, default: 5 },
   N: { width: 8, default: 1 },
-  Comment: { width: 15, default: "" },
+  Comment: { width: 17, default: "" },
 };
 
 const FC_HEADERS = Object.keys(FC_SCHEMA);
@@ -66,6 +66,14 @@ const ECHOTASTIC_COLUMNS = [
   "Area",
   "Operator",
 ];
+
+function formatFcComment(confidence) {
+  const value = asFloat(confidence);
+  if (Number.isNaN(value)) {
+    return FC_COMMENT_PREFIX.slice(0, FC_SCHEMA.Comment.width);
+  }
+  return `${FC_COMMENT_PREFIX}${value.toFixed(2)}`.slice(0, FC_SCHEMA.Comment.width);
+}
 
 function asFloat(value) {
   if (value === null || value === undefined) {
@@ -713,7 +721,7 @@ function buildFcRecords(rows, filename, upstreamDirection) {
       Aspect: roundDecimal(lengthOverRange, 2),
       Date: date,
       Species: String(defaults.Species).slice(0, FC_SCHEMA.Species.width),
-      Comment: FC_COMMENT.slice(0, FC_SCHEMA.Comment.width),
+      Comment: formatFcComment(row.confidence),
     });
   }
 
