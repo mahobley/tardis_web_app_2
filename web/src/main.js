@@ -445,6 +445,105 @@ function asFiniteNumber(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function clearFieldValidation(field) {
+  field.setCustomValidity("");
+}
+
+function failFieldValidation(field, message) {
+  field.setCustomValidity(message);
+  return {
+    ok: false,
+    field,
+    message,
+  };
+}
+
+function validateFrameRangeInputs() {
+  clearFieldValidation(elements.startFrame);
+  clearFieldValidation(elements.endFrame);
+
+  if (elements.runAllFrames.checked) {
+    return { ok: true };
+  }
+
+  const startFrame = Number(elements.startFrame.value);
+  if (!Number.isInteger(startFrame) || startFrame < 0) {
+    return failFieldValidation(
+      elements.startFrame,
+      "Start frame must be a whole number greater than or equal to 0.",
+    );
+  }
+
+  const endFrame = Number(elements.endFrame.value);
+  if (!Number.isInteger(endFrame) || (endFrame < 0 && endFrame !== -1)) {
+    return failFieldValidation(
+      elements.endFrame,
+      "End frame must be -1 or a whole number greater than or equal to 0.",
+    );
+  }
+
+  if (endFrame !== -1 && endFrame <= startFrame) {
+    return failFieldValidation(
+      elements.endFrame,
+      "End frame must be greater than start frame.",
+    );
+  }
+
+  if (endFrame !== -1 && endFrame - startFrame < 2) {
+    return failFieldValidation(
+      elements.endFrame,
+      "Frame range must include at least 2 frames to generate an echogram.",
+    );
+  }
+
+  return { ok: true };
+}
+
+function validateConfidenceInput() {
+  clearFieldValidation(elements.confidence);
+  const confidence = Number(elements.confidence.value);
+  if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+    return failFieldValidation(
+      elements.confidence,
+      "Confidence must be a number between 0 and 1.",
+    );
+  }
+  return { ok: true };
+}
+
+function validateIouInput() {
+  clearFieldValidation(elements.iou);
+  const iou = Number(elements.iou.value);
+  if (!Number.isFinite(iou) || iou < 0 || iou > 1) {
+    return failFieldValidation(
+      elements.iou,
+      "IoU must be a number between 0 and 1.",
+    );
+  }
+  return { ok: true };
+}
+
+function validateControls({ report = false, updateStatus = true } = {}) {
+  const firstFailure =
+    [validateFrameRangeInputs(), validateConfidenceInput(), validateIouInput()].find(
+      (result) => !result.ok,
+    ) ?? null;
+
+  if (!firstFailure) {
+    clearStatusError();
+    return true;
+  }
+
+  if (updateStatus) {
+    setStatus(`Error: ${firstFailure.message}`, 0);
+  }
+  setStatusError(firstFailure.message);
+  if (report) {
+    firstFailure.field.reportValidity();
+  }
+  return false;
+}
+
 function buildDecodedSummary(decoded) {
   const parts = [`${decoded.width} frames x ${decoded.height} bins`];
   const metadata = decoded.metadata ?? null;
@@ -1110,6 +1209,7 @@ elements.useBundledModel.addEventListener("change", () => {
 elements.runAllFrames.addEventListener("change", () => {
   syncFrameRangeState();
   persistSettings();
+  validateControls({ updateStatus: false });
 });
 
 elements.nativeFps.addEventListener("change", () => {
@@ -1149,12 +1249,18 @@ for (const input of [
   elements.inferenceFps,
   elements.inferenceBins,
 ]) {
-  input.addEventListener("change", persistSettings);
+  input.addEventListener("change", () => {
+    persistSettings();
+    validateControls({ updateStatus: false });
+  });
 }
 
 elements.sonarFile.addEventListener("change", resetVisuals);
 
 elements.decodeButton.addEventListener("click", async () => {
+  if (!validateControls({ report: true })) {
+    return;
+  }
   try {
     await runWithBusyState(async () => {
       await decodeSelectedFile();
@@ -1165,6 +1271,9 @@ elements.decodeButton.addEventListener("click", async () => {
 });
 
 elements.runButton.addEventListener("click", async () => {
+  if (!validateControls({ report: true })) {
+    return;
+  }
   try {
     await runWithBusyState(async () => {
       await runSegmentation();
