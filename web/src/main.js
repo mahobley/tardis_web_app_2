@@ -50,7 +50,9 @@ const elements = {
   decodedCanvas: document.querySelector("#decoded-canvas"),
   overlayCanvas: document.querySelector("#overlay-canvas"),
   downloadDecodedButton: document.querySelector("#download-decoded-button"),
+  downloadDecodedJpgButton: document.querySelector("#download-decoded-jpg-button"),
   downloadOverlayButton: document.querySelector("#download-overlay-button"),
+  downloadOverlayJpgButton: document.querySelector("#download-overlay-jpg-button"),
   downloadFcButton: document.querySelector("#download-fc-button"),
   downloadCsvButton: document.querySelector("#download-csv-button"),
   downloadEchotasticButton: document.querySelector("#download-echotastic-button"),
@@ -194,7 +196,9 @@ function currentUpstreamDirection() {
 function updateDownloadButtons() {
   const busy = state.running;
   elements.downloadDecodedButton.disabled = busy || !state.decodedImageData;
+  elements.downloadDecodedJpgButton.disabled = busy || !state.decodedImageData;
   elements.downloadOverlayButton.disabled = busy || !state.overlayImageData;
+  elements.downloadOverlayJpgButton.disabled = busy || !state.overlayImageData;
   elements.downloadCsvButton.disabled = busy || !state.exportFiles.csvText;
   elements.downloadFcButton.disabled = busy || !state.exportFiles.fcText;
   elements.downloadEchotasticButton.disabled = busy || !state.exportFiles.echotasticText;
@@ -788,7 +792,7 @@ async function runWithBusyState(task) {
   }
 }
 
-async function canvasToBlob(canvas) {
+async function canvasToBlob(canvas, type = "image/png", quality) {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (!blob) {
@@ -796,7 +800,7 @@ async function canvasToBlob(canvas) {
         return;
       }
       resolve(blob);
-    }, "image/png");
+    }, type, quality);
   });
 }
 
@@ -812,7 +816,12 @@ function downloadBlob(filename, blob) {
 }
 
 async function downloadCanvasPng(canvas, filename) {
-  const blob = await canvasToBlob(canvas);
+  const blob = await canvasToBlob(canvas, "image/png");
+  downloadBlob(filename, blob);
+}
+
+async function downloadCanvasJpg(canvas, filename) {
+  const blob = await canvasToBlob(canvas, "image/jpeg", 0.92);
   downloadBlob(filename, blob);
 }
 
@@ -883,6 +892,28 @@ elements.downloadOverlayButton.addEventListener("click", async () => {
     await downloadCanvasPng(
       elements.overlayCanvas,
       `${currentCsvBaseName()}_overlay.png`,
+    );
+  } catch (error) {
+    setStatus(`Error: ${error.message}`, 0);
+  }
+});
+
+elements.downloadDecodedJpgButton.addEventListener("click", async () => {
+  try {
+    await downloadCanvasJpg(
+      elements.decodedCanvas,
+      `${currentCsvBaseName()}_decoded.jpg`,
+    );
+  } catch (error) {
+    setStatus(`Error: ${error.message}`, 0);
+  }
+});
+
+elements.downloadOverlayJpgButton.addEventListener("click", async () => {
+  try {
+    await downloadCanvasJpg(
+      elements.overlayCanvas,
+      `${currentCsvBaseName()}_overlay.jpg`,
     );
   } catch (error) {
     setStatus(`Error: ${error.message}`, 0);
