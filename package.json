@@ -1,7 +1,7 @@
 {
   "name": "echo-seg-user-pipeline_web",
   "version": "1.0.0",
-  "description": "Load ARIS/DIDSON echograms, run YOLO segmentation, and export prediction plots and CSV detections.",
+  "description": "Browser app for decoding ARIS/DIDSON echograms and running ONNX segmentation locally.",
   "type": "module",
   "scripts": {
     "dev": "vite --host --strictPort",
@@ -21,7 +21,6 @@
   },
   "homepage": "https://github.com/mahobley/TaRDIS_app#readme",
   "dependencies": {
-    "onnxruntime-node": "^1.27.0",
     "onnxruntime-web": "^1.27.0",
     "vite": "^8.1.0"
   }

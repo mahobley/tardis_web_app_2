@@ -1,12 +1,7 @@
+# Only needed for `npm run verify:decoder`.
 numpy
 pandas
 opencv-python
-Pillow
 matplotlib
 tqdm
-ultralytics
-torch
-PySide6>=6.5
-
-# Optional: pip install pyinstaller
-# pyinstaller>=6.0
+pytz
