@@ -44,6 +44,7 @@ const elements = {
   decodeButton: document.querySelector("#decode-button"),
   runButton: document.querySelector("#run-button"),
   statusText: document.querySelector("#status-text"),
+  statusErrorBox: document.querySelector("#status-error-box"),
   progressBar: document.querySelector("#progress-bar"),
   statusTimeLabel: document.querySelector("#status-time-label"),
   statusTimeValue: document.querySelector("#status-time-value"),
@@ -111,6 +112,7 @@ const MIN_ZOOM_REGION_SIZE = 32;
 const MAX_ZOOM_REGION_SIZE = 256;
 const ZOOM_REGION_STEP = 16;
 const ZOOM_CANVAS_SIZE = 512;
+const MAX_BROWSER_INFERENCE_PIXELS = 4_194_304;
 let zoomRegionSize = DEFAULT_ZOOM_REGION_SIZE;
 const ADVANCED_DEFAULTS = {
   backend: "webgpu",
@@ -261,6 +263,29 @@ function setStatus(text, progress = null) {
   }
 }
 
+function clearStatusError() {
+  elements.statusErrorBox.hidden = true;
+  elements.statusErrorBox.textContent = "";
+}
+
+function setStatusError(message) {
+  elements.statusErrorBox.textContent = message;
+  elements.statusErrorBox.hidden = !message;
+}
+
+function userFacingErrorMessage(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (
+    message.includes("ran out of memory") ||
+    message.includes("too large for the browser") ||
+    message.includes("std::bad_alloc") ||
+    message.includes("ERROR_CODE: 6")
+  ) {
+    return "The selected data is too large for the web version with the current settings. Decrease the frame range, frame rate, and/or num bins, then try again.";
+  }
+  return message;
+}
+
 function formatElapsedTime(ms) {
   const totalSeconds = Math.max(0, ms / 1000);
   if (totalSeconds < 60) {
@@ -331,6 +356,36 @@ function syncRunButtonLabel() {
 
 function currentUpstreamDirection() {
   return elements.upstreamDirectionInputs.find((input) => input.checked)?.value ?? "left";
+}
+
+function computeAutoInferenceTargets(width, height, allowWidthAdjust, allowHeightAdjust) {
+  const pixelCount = width * height;
+  if (pixelCount <= MAX_BROWSER_INFERENCE_PIXELS) {
+    return null;
+  }
+  if (!allowWidthAdjust && !allowHeightAdjust) {
+    return null;
+  }
+
+  if (allowWidthAdjust && allowHeightAdjust) {
+    const scale = Math.sqrt(MAX_BROWSER_INFERENCE_PIXELS / pixelCount);
+    return {
+      width: Math.max(1, Math.floor(width * scale)),
+      height: Math.max(1, Math.floor(height * scale)),
+    };
+  }
+
+  if (allowWidthAdjust) {
+    return {
+      width: Math.max(1, Math.floor(MAX_BROWSER_INFERENCE_PIXELS / height)),
+      height,
+    };
+  }
+
+  return {
+    width,
+    height: Math.max(1, Math.floor(MAX_BROWSER_INFERENCE_PIXELS / width)),
+  };
 }
 
 function updateDownloadButtons() {
@@ -776,6 +831,9 @@ async function runSegmentation() {
   let achievedFrameRate = nativeFrameRate;
   let usedNativeFps = true;
   let usedNativeBins = true;
+  let autoDownsampledForBrowser = false;
+  let preAutoFrameRate = achievedFrameRate;
+  let preAutoNumBins = inferenceHeight;
 
   if (!elements.nativeFps.checked) {
     const goalFrameRate = Number(elements.inferenceFps.value);
@@ -812,23 +870,91 @@ async function runSegmentation() {
     usedNativeBins = inferenceHeight === decoded.height;
   }
 
+  const autoTargets = computeAutoInferenceTargets(
+    inferenceWidth,
+    inferenceHeight,
+    elements.nativeFps.checked,
+    elements.nativeBins.checked,
+  );
+  if (autoTargets) {
+    preAutoFrameRate = achievedFrameRate;
+    preAutoNumBins = inferenceHeight;
+    setStatus(
+      `Large echogram detected; reducing browser inference size to ${autoTargets.width} frames x ${autoTargets.height} bins...`,
+      15,
+    );
+
+    if (elements.nativeFps.checked && autoTargets.width < inferenceWidth) {
+      const autoGoalFrameRate = nativeFrameRate * (autoTargets.width / decoded.width);
+      const autoDownsampled = downsampleRgbForInference(
+        inferenceRgbImage,
+        inferenceWidth,
+        inferenceHeight,
+        autoGoalFrameRate,
+        nativeFrameRate,
+      );
+      inferenceRgbImage = autoDownsampled.rgbImage;
+      inferenceWidth = autoDownsampled.width;
+      frameIndices = autoDownsampled.frameIndices;
+      achievedFrameRate = autoDownsampled.achievedFrameRate;
+      usedNativeFps = false;
+      autoDownsampledForBrowser = true;
+    }
+
+    if (elements.nativeBins.checked && autoTargets.height < inferenceHeight) {
+      const autoResized = resizeRgbHeightForInference(
+        inferenceRgbImage,
+        inferenceWidth,
+        inferenceHeight,
+        autoTargets.height,
+      );
+      inferenceRgbImage = autoResized.rgbImage;
+      inferenceHeight = autoResized.height;
+      usedNativeBins = false;
+      autoDownsampledForBrowser = true;
+    }
+  }
+
+  if (inferenceWidth * inferenceHeight > MAX_BROWSER_INFERENCE_PIXELS) {
+    throw new Error(
+      "Inference image is too large for the browser. Reduce Frame rate and/or Num bins, or use the desktop tool.",
+    );
+  }
+
   state.frameIndices = frameIndices;
   state.inferenceFrameRate = achievedFrameRate;
   state.inferenceUsedNativeFps = usedNativeFps;
   state.inferenceNumBins = inferenceHeight;
   state.inferenceUsedNativeBins = usedNativeBins;
 
+  if (autoDownsampledForBrowser) {
+    setStatusError(
+      `The selected data is too large for the web version at these settings. The browser automatically reduced the inference resolution from ${preAutoFrameRate.toFixed(2)} to ${achievedFrameRate.toFixed(2)} FPS and from ${preAutoNumBins} to ${inferenceHeight} distance bins. For better control, decrease the frame range, frame rate, and/or num bins yourself.`,
+    );
+  }
+
   setStatus("Running ONNX segmentation...", 20);
-  const result = await runYoloSegmentation({
-    session,
-    rgbImage: inferenceRgbImage,
-    width: inferenceWidth,
-    height: inferenceHeight,
-    outputWidth: decoded.width,
-    outputHeight: decoded.height,
-    confidence: Number(elements.confidence.value),
-    iouThreshold: Number(elements.iou.value),
-  });
+  let result;
+  try {
+    result = await runYoloSegmentation({
+      session,
+      rgbImage: inferenceRgbImage,
+      width: inferenceWidth,
+      height: inferenceHeight,
+      outputWidth: decoded.width,
+      outputHeight: decoded.height,
+      confidence: Number(elements.confidence.value),
+      iouThreshold: Number(elements.iou.value),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("std::bad_alloc") || message.includes("ERROR_CODE: 6")) {
+      throw new Error(
+        "Browser inference ran out of memory. Reduce Frame rate and/or Num bins, or use the desktop tool.",
+      );
+    }
+    throw error;
+  }
 
   const overlayImage = makeOverlayImage(decoded.imageBgr, decoded.width, decoded.height, result.detections);
   state.overlayImage = overlayImage;
@@ -893,6 +1019,7 @@ function resetVisuals() {
   hideZoomPopup();
   stopStatusTimer("Time");
   setStatus("Idle.", 0);
+  clearStatusError();
   syncRunButtonLabel();
   updateDownloadButtons();
 }
@@ -900,12 +1027,14 @@ function resetVisuals() {
 async function runWithBusyState(task) {
   setBusy(true);
   startStatusTimer();
+  clearStatusError();
   try {
     await task();
     stopStatusTimer("Time");
   } catch (error) {
     stopStatusTimer("Time");
     setStatus(`Error: ${error.message}`, 0);
+    setStatusError(userFacingErrorMessage(error));
     throw error;
   } finally {
     setBusy(false);
@@ -1112,3 +1241,4 @@ applyStoredSettings();
 syncRunButtonLabel();
 updateDownloadButtons();
 setStatus("Idle.", 0);
+clearStatusError();

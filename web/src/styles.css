@@ -404,6 +404,17 @@ button:disabled {
   font-size: 0.92rem;
 }
 
+.status-error-box {
+  margin-top: 1rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid rgba(185, 28, 28, 0.22);
+  border-radius: 16px;
+  background: rgba(254, 226, 226, 0.82);
+  color: #991b1b;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
 .viewer-header {
   display: flex;
   align-items: flex-start;
