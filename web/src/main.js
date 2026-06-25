@@ -325,6 +325,14 @@ function startStatusTimer() {
   }, 100);
 }
 
+async function waitForNextPaint() {
+  await new Promise((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.setTimeout(resolve, 0);
+    });
+  });
+}
+
 function syncModelFileState() {
   const disabled = elements.useBundledModel.checked || state.running;
   elements.modelFile.disabled = disabled;
@@ -873,11 +881,12 @@ async function decodeSelectedFile() {
     throw new Error("Select an ARIS or DDF file first");
   }
   state.sonarFile = file;
-
-  const buffer = await file.arrayBuffer();
   const decodeRequest = currentDecodeRequest();
 
   setStatus("Generating echogram in JavaScript...", 0);
+  await waitForNextPaint();
+
+  const buffer = await file.arrayBuffer();
   const decoded = await decodeSonarBuffer(buffer, {
     startFrame: decodeRequest.startFrame,
     endFrame: decodeRequest.endFrame,
