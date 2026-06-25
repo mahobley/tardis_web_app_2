@@ -125,12 +125,21 @@ const ADVANCED_DEFAULTS = {
   iou: "0.50",
   useBundledModel: true,
 };
+const SETTINGS_STORAGE_KEY = "fisheye-echogram-settings-v1";
+const DEFAULT_SETTINGS = {
+  upstreamDirection: "left",
+  advancedExpanded: false,
+  ...ADVANCED_DEFAULTS,
+};
 
-function setAdvancedExpanded(expanded) {
+function setAdvancedExpanded(expanded, persist = false) {
   elements.advancedContent.hidden = !expanded;
   elements.advancedReset.hidden = !expanded;
   elements.advancedToggle.setAttribute("aria-expanded", String(expanded));
   elements.advancedToggle.textContent = expanded ? "Hide" : "Show";
+  if (persist) {
+    persistSettings();
+  }
 }
 
 function resetAdvancedSettings() {
@@ -150,6 +159,99 @@ function resetAdvancedSettings() {
   syncInferenceFpsState();
   syncInferenceBinsState();
   syncModelFileState();
+  persistSettings();
+}
+
+function loadStoredSettings() {
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistSettings() {
+  try {
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        upstreamDirection: currentUpstreamDirection(),
+        advancedExpanded: !elements.advancedContent.hidden,
+        backend: elements.backend.value,
+        runAllFrames: elements.runAllFrames.checked,
+        startFrame: elements.startFrame.value,
+        endFrame: elements.endFrame.value,
+        nativeFps: elements.nativeFps.checked,
+        inferenceFps: elements.inferenceFps.value,
+        nativeBins: elements.nativeBins.checked,
+        inferenceBins: elements.inferenceBins.value,
+        confidence: elements.confidence.value,
+        iou: elements.iou.value,
+        useBundledModel: elements.useBundledModel.checked,
+      }),
+    );
+  } catch {
+    // Ignore storage failures and continue with in-memory settings.
+  }
+}
+
+function applyStoredSettings() {
+  const stored = loadStoredSettings();
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    ...(stored ?? {}),
+  };
+
+  const upstreamDirection =
+    settings.upstreamDirection === "right" ? "right" : DEFAULT_SETTINGS.upstreamDirection;
+  for (const input of elements.upstreamDirectionInputs) {
+    input.checked = input.value === upstreamDirection;
+  }
+
+  elements.backend.value =
+    settings.backend === "wasm" || settings.backend === "webgpu"
+      ? settings.backend
+      : DEFAULT_SETTINGS.backend;
+  elements.runAllFrames.checked =
+    typeof settings.runAllFrames === "boolean"
+      ? settings.runAllFrames
+      : DEFAULT_SETTINGS.runAllFrames;
+  elements.startFrame.value =
+    typeof settings.startFrame === "string" ? settings.startFrame : DEFAULT_SETTINGS.startFrame;
+  elements.endFrame.value =
+    typeof settings.endFrame === "string" ? settings.endFrame : DEFAULT_SETTINGS.endFrame;
+  elements.nativeFps.checked =
+    typeof settings.nativeFps === "boolean" ? settings.nativeFps : DEFAULT_SETTINGS.nativeFps;
+  elements.inferenceFps.value =
+    typeof settings.inferenceFps === "string"
+      ? settings.inferenceFps
+      : DEFAULT_SETTINGS.inferenceFps;
+  elements.nativeBins.checked =
+    typeof settings.nativeBins === "boolean" ? settings.nativeBins : DEFAULT_SETTINGS.nativeBins;
+  elements.inferenceBins.value =
+    typeof settings.inferenceBins === "string"
+      ? settings.inferenceBins
+      : DEFAULT_SETTINGS.inferenceBins;
+  elements.confidence.value =
+    typeof settings.confidence === "string"
+      ? settings.confidence
+      : DEFAULT_SETTINGS.confidence;
+  elements.iou.value = typeof settings.iou === "string" ? settings.iou : DEFAULT_SETTINGS.iou;
+  elements.useBundledModel.checked =
+    typeof settings.useBundledModel === "boolean"
+      ? settings.useBundledModel
+      : DEFAULT_SETTINGS.useBundledModel;
+
+  syncFrameRangeState();
+  syncInferenceFpsState();
+  syncInferenceBinsState();
+  syncModelFileState();
+  setAdvancedExpanded(Boolean(settings.advancedExpanded));
 }
 
 function setStatus(text, progress = null) {
@@ -853,18 +955,22 @@ function downloadTextFile(filename, text) {
 
 elements.useBundledModel.addEventListener("change", () => {
   syncModelFileState();
+  persistSettings();
 });
 
 elements.runAllFrames.addEventListener("change", () => {
   syncFrameRangeState();
+  persistSettings();
 });
 
 elements.nativeFps.addEventListener("change", () => {
   syncInferenceFpsState();
+  persistSettings();
 });
 
 elements.nativeBins.addEventListener("change", () => {
   syncInferenceBinsState();
+  persistSettings();
 });
 
 elements.advancedReset.addEventListener("click", () => {
@@ -872,16 +978,29 @@ elements.advancedReset.addEventListener("click", () => {
 });
 
 elements.advancedToggle.addEventListener("click", () => {
-  setAdvancedExpanded(elements.advancedContent.hidden);
+  setAdvancedExpanded(elements.advancedContent.hidden, true);
 });
 
 for (const input of elements.upstreamDirectionInputs) {
   input.addEventListener("change", () => {
+    persistSettings();
     if (!state.predictionRows.length) {
       return;
     }
     buildExportFiles();
   });
+}
+
+for (const input of [
+  elements.backend,
+  elements.startFrame,
+  elements.endFrame,
+  elements.confidence,
+  elements.iou,
+  elements.inferenceFps,
+  elements.inferenceBins,
+]) {
+  input.addEventListener("change", persistSettings);
 }
 
 elements.sonarFile.addEventListener("change", resetVisuals);
@@ -989,11 +1108,7 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
-syncFrameRangeState();
-syncInferenceFpsState();
-syncInferenceBinsState();
-syncModelFileState();
-setAdvancedExpanded(false);
+applyStoredSettings();
 syncRunButtonLabel();
 updateDownloadButtons();
 setStatus("Idle.", 0);
