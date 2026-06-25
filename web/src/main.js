@@ -179,6 +179,12 @@ function syncInferenceFpsState() {
   elements.inferenceFpsField.classList.toggle("disabled-field", disabled);
 }
 
+function syncRunButtonLabel() {
+  elements.runButton.textContent = state.decoded
+    ? "Run TaRDIS"
+    : "Generate Echogram + Run TaRDIS";
+}
+
 function currentUpstreamDirection() {
   return (
     elements.upstreamDirectionInputs.find((input) => input.checked)?.value ?? "left"
@@ -638,6 +644,7 @@ async function decodeSelectedFile() {
   };
   renderMeta(decoded);
   renderDecodedPreview(decoded, visualRgbImage);
+  syncRunButtonLabel();
   elements.overlaySummary.textContent = "Run inference to populate this panel.";
   elements.countsSummary.textContent = "No detections yet.";
   elements.detectionsBody.innerHTML =
@@ -762,6 +769,7 @@ function resetVisuals() {
   hideZoomPopup();
   stopStatusTimer("Time");
   setStatus("Idle.", 0);
+  syncRunButtonLabel();
   updateDownloadButtons();
 }
 
@@ -941,5 +949,6 @@ syncFrameRangeState();
 syncModelFileState();
 syncInferenceFpsState();
 setAdvancedExpanded(false);
+syncRunButtonLabel();
 updateDownloadButtons();
 setStatus("Idle.", 0);
