@@ -795,11 +795,12 @@ function renderDetectionsTable(displayRows, detections) {
     return;
   }
 
-  const counts = new Map();
-  for (const detection of detections) {
-    counts.set(detection.className, (counts.get(detection.className) ?? 0) + 1);
-  }
-  elements.countsSummary.textContent = [...counts.entries()].map(([name, count]) => `${name}: ${count}`).join("  |  ");
+  const counts = countOverlayDirections(detections, currentUpstreamDirection());
+  elements.countsSummary.textContent =
+    `${detections.length} detections (` +
+    `${counts.upstream} upstream | ` +
+    `${counts.downstream} downstream | ` +
+    `${counts.noCrossing} no crossing)`;
 
   elements.detectionsBody.innerHTML = displayRows
     .map((row) => {

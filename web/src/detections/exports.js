@@ -145,23 +145,23 @@ function crossingSide(className, classId) {
     return null;
   }
   const label = normalizeClassLabel(className, classId);
+  if (label.includes("left")) {
+    return "left";
+  }
+  if (label.includes("right")) {
+    return "right";
+  }
   if (label.includes("pos")) {
-    return "pos";
+    return "left";
   }
   if (label.includes("neg")) {
-    return "neg";
+    return "right";
   }
-  if (label === "left" || label === "0") {
-    return "pos";
+  if (label === "0" || classId === 0) {
+    return "left";
   }
-  if (label === "right" || label === "1") {
-    return "neg";
-  }
-  if (classId === 0) {
-    return "pos";
-  }
-  if (classId === 1) {
-    return "neg";
+  if (label === "1" || classId === 1) {
+    return "right";
   }
   return null;
 }
@@ -173,10 +173,10 @@ export function fcDirectionForCrossing(className, classId, upstreamDirection) {
   }
   const upstream = String(upstreamDirection ?? "").toLowerCase().trim();
   if (upstream === "left") {
-    return side === "pos" ? "Down" : "Up";
+    return side === "left" ? "Up" : "Down";
   }
   if (upstream === "right") {
-    return side === "pos" ? "Up" : "Down";
+    return side === "right" ? "Up" : "Down";
   }
   throw new Error(`upstream_direction must be 'left' or 'right', got ${upstreamDirection}`);
 }
@@ -188,10 +188,10 @@ function echotasticDirection(className, classId, upstreamDirection) {
   }
   const upstream = String(upstreamDirection ?? "").toLowerCase().trim();
   if (upstream === "left") {
-    return side === "pos" ? 1 : -1;
+    return side === "left" ? 1 : -1;
   }
   if (upstream === "right") {
-    return side === "pos" ? -1 : 1;
+    return side === "right" ? 1 : -1;
   }
   throw new Error(`upstream_direction must be 'left' or 'right', got ${upstreamDirection}`);
 }
