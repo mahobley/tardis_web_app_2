@@ -910,8 +910,16 @@ function hideZoomPopup() {
   state.zoom.previewRequestId += 1;
 }
 
+function canvasHasZoomableImage(canvas) {
+  return (
+    canvas.width > 1 &&
+    canvas.height > 1 &&
+    !canvas.classList.contains("canvas-empty")
+  );
+}
+
 function renderZoomPopup(sourceCanvas, title, imageX, imageY, clientX, clientY) {
-  if (sourceCanvas.width <= 1 || sourceCanvas.height <= 1) {
+  if (!canvasHasZoomableImage(sourceCanvas)) {
     hideZoomPopup();
     return;
   }
@@ -988,7 +996,7 @@ function rerenderZoomPopup() {
 }
 
 function updateZoomPopup(sourceCanvas, title, event) {
-  if (sourceCanvas.width <= 1 || sourceCanvas.height <= 1) {
+  if (!canvasHasZoomableImage(sourceCanvas)) {
     hideZoomPopup();
     return;
   }
@@ -1016,9 +1024,17 @@ function updateZoomPopup(sourceCanvas, title, event) {
 
 function attachZoomHandlers(canvas, title) {
   canvas.addEventListener("mouseenter", (event) => {
+    if (!canvasHasZoomableImage(canvas)) {
+      hideZoomPopup();
+      return;
+    }
     updateZoomPopup(canvas, title, event);
   });
   canvas.addEventListener("mousemove", (event) => {
+    if (!canvasHasZoomableImage(canvas)) {
+      hideZoomPopup();
+      return;
+    }
     updateZoomPopup(canvas, title, event);
   });
   canvas.addEventListener("mouseleave", () => {
