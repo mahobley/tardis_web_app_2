@@ -120,10 +120,10 @@ function normalizeClassLabel(className, classId) {
     .replaceAll("_", "-");
   if (name === "-1" || name === "nan" || name === "unknown" || name === "") {
     if (classId === 0) {
-      return "left";
+      return "right";
     }
     if (classId === 1) {
-      return "right";
+      return "left";
     }
     if (classId === 2) {
       return "no-cross";
@@ -158,10 +158,10 @@ function crossingSide(className, classId) {
     return "right";
   }
   if (label === "0" || classId === 0) {
-    return "left";
+    return "right";
   }
   if (label === "1" || classId === 1) {
-    return "right";
+    return "left";
   }
   return null;
 }

@@ -742,6 +742,15 @@ function renderOverlaySummary({
   }
 
   const counts = countOverlayDirections(detections, currentUpstreamDirection());
+  const upstreamDirection = currentUpstreamDirection();
+  const upstreamSummaryClass =
+    upstreamDirection === "left"
+      ? "overlay-summary-count-left"
+      : "overlay-summary-count-right";
+  const downstreamSummaryClass =
+    upstreamDirection === "left"
+      ? "overlay-summary-count-right"
+      : "overlay-summary-count-left";
   const nativeDisplayRate = nativeHeaderFrameRate ?? achievedFrameRate;
   const fpsSummary = usedNativeFps
     ? `native ${nativeDisplayRate.toFixed(2)} fps`
@@ -752,8 +761,8 @@ function renderOverlaySummary({
 
   elements.overlaySummary.innerHTML =
     `${detections.length} detections rendered (` +
-    `<span class="overlay-summary-count overlay-summary-count-upstream">${counts.upstream} upstream</span>, ` +
-    `<span class="overlay-summary-count overlay-summary-count-downstream">${counts.downstream} downstream</span>, ` +
+    `<span class="overlay-summary-count ${upstreamSummaryClass}">${counts.upstream} upstream</span>, ` +
+    `<span class="overlay-summary-count ${downstreamSummaryClass}">${counts.downstream} downstream</span>, ` +
     `<span class="overlay-summary-count overlay-summary-count-no-crossing">${counts.noCrossing} no crossing</span>)` +
     ` | inference: ${fpsSummary} | ${binsSummary}`;
 }

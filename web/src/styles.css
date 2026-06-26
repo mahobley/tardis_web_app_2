@@ -6,8 +6,8 @@
   --muted: #5d6b77;
   --accent: #006d77;
   --accent-2: #d97706;
-  --overlay-upstream: #2563eb;
-  --overlay-downstream: #ea580c;
+  --overlay-right: #2563eb;
+  --overlay-left: #ea580c;
   --overlay-no-crossing: #d946ef;
   --line: rgba(31, 41, 51, 0.12);
   --shadow: 0 18px 50px rgba(31, 41, 51, 0.12);
@@ -484,12 +484,12 @@ button:disabled {
   font-weight: 700;
 }
 
-.overlay-summary-count-upstream {
-  color: var(--overlay-upstream);
+.overlay-summary-count-right {
+  color: var(--overlay-right);
 }
 
-.overlay-summary-count-downstream {
-  color: var(--overlay-downstream);
+.overlay-summary-count-left {
+  color: var(--overlay-left);
 }
 
 .overlay-summary-count-no-crossing {

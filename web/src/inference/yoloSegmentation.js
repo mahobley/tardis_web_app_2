@@ -2,7 +2,7 @@ import * as ort from "onnxruntime-web";
 import { clampClassId } from "../render/classColours.js";
 import { rgbToImageData } from "../render/imageData.js";
 
-const CLASS_NAMES = ["left", "right", "no-cross"];
+const CLASS_NAMES = ["right", "left", "no-cross"];
 
 function createCanvas(width, height) {
   if (typeof OffscreenCanvas !== "undefined") {
