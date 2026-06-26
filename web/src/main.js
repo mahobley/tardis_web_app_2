@@ -13,6 +13,7 @@ import {
   headerFramerateFromMetadata,
   isNoCrossDetection,
   resizeRgbHeightForInference,
+  convertBinToM,
 } from "./detections/exports.js";
 import { createSegmentationSession, defaultModelUrl, runYoloSegmentation } from "./inference/yoloSegmentation.js";
 import { rgbToImageData } from "./render/imageData.js";
@@ -126,6 +127,7 @@ const state = {
     clientY: 0,
     frameNumber: null,
     previewFrameNumber: null,
+    previewFrameImageData: null,
     previewRequestId: 0,
   },
 };
@@ -639,6 +641,74 @@ function clearZoomFramePreview() {
   ctx.fillStyle = "#111827";
   ctx.fillRect(0, 0, elements.zoomFrameCanvas.width, elements.zoomFrameCanvas.height);
   state.zoom.previewFrameNumber = null;
+  state.zoom.previewFrameImageData = null;
+}
+
+function hoveredDistanceForCanvas(imageY, imageHeight) {
+  const metadata = state.decoded?.metadata ?? null;
+  if (!metadata || imageHeight <= 1) {
+    return Number.NaN;
+  }
+  const percentUp = (imageHeight - 1 - imageY) / (imageHeight - 1);
+  const windowStart = asFiniteNumber(metadata.windowstart);
+  const windowLength = asFiniteNumber(metadata.windowlength);
+  if (windowStart !== null && windowLength !== null) {
+    return windowStart + percentUp * windowLength;
+  }
+  return convertBinToM(imageY, metadata);
+}
+
+function hoveredFrameGuideY(sourceCanvas, imageY, targetHeight) {
+  if (targetHeight <= 1) {
+    return null;
+  }
+
+  const hoveredDistance = hoveredDistanceForCanvas(imageY, sourceCanvas.height);
+  const metadata = state.decoded?.metadata ?? null;
+  if (Number.isFinite(hoveredDistance) && metadata) {
+    const nearDistance = convertBinToM(targetHeight - 1, metadata);
+    const farDistance = convertBinToM(0, metadata);
+    if (
+      Number.isFinite(nearDistance) &&
+      Number.isFinite(farDistance) &&
+      Math.abs(farDistance - nearDistance) > 1e-9
+    ) {
+      const ratio = (farDistance - hoveredDistance) / (farDistance - nearDistance);
+      return Math.max(0, Math.min(targetHeight - 1, Math.round(ratio * (targetHeight - 1))));
+    }
+  }
+
+  if (sourceCanvas.height <= 1) {
+    return null;
+  }
+  const ratio = imageY / (sourceCanvas.height - 1);
+  return Math.max(0, Math.min(targetHeight - 1, Math.round(ratio * (targetHeight - 1))));
+}
+
+function drawZoomFrameGuide(ctx, width, y) {
+  if (!Number.isFinite(y)) {
+    return;
+  }
+  ctx.save();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  ctx.moveTo(0, y + 0.5);
+  ctx.lineTo(width, y + 0.5);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function paintZoomFramePreview(imageData) {
+  elements.zoomFrameCanvas.width = imageData.width;
+  elements.zoomFrameCanvas.height = imageData.height;
+  const ctx = elements.zoomFrameCanvas.getContext("2d", { willReadFrequently: true });
+  ctx.putImageData(imageData, 0, 0);
+  const guideY = state.zoom.sourceCanvas
+    ? hoveredFrameGuideY(state.zoom.sourceCanvas, state.zoom.imageY, imageData.height)
+    : null;
+  drawZoomFrameGuide(ctx, imageData.width, guideY);
 }
 
 async function renderZoomFramePreview(frameNumber) {
@@ -646,7 +716,8 @@ async function renderZoomFramePreview(frameNumber) {
     clearZoomFramePreview();
     return;
   }
-  if (state.zoom.previewFrameNumber === frameNumber) {
+  if (state.zoom.previewFrameNumber === frameNumber && state.zoom.previewFrameImageData) {
+    paintZoomFramePreview(state.zoom.previewFrameImageData);
     return;
   }
 
@@ -666,10 +737,8 @@ async function renderZoomFramePreview(frameNumber) {
   }
 
   const imageData = rgbToImageData(decodedFrame.rgbImage, decodedFrame.width, decodedFrame.height);
-  elements.zoomFrameCanvas.width = imageData.width;
-  elements.zoomFrameCanvas.height = imageData.height;
-  const ctx = elements.zoomFrameCanvas.getContext("2d", { willReadFrequently: true });
-  ctx.putImageData(imageData, 0, 0);
+  state.zoom.previewFrameImageData = imageData;
+  paintZoomFramePreview(imageData);
   state.zoom.previewFrameNumber = decodedFrame.frameIndex;
 }
 
