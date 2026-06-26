@@ -2,6 +2,7 @@ import {
   buildDisplayRows,
   buildPredictionRows,
   csvFilename,
+  fcDirectionForCrossing,
   downsampleRgbForInference,
   echotasticFilename,
   fcFilename,
@@ -10,11 +11,16 @@ import {
   formatPredictionCsv,
   framerateFromMetadata,
   headerFramerateFromMetadata,
+  isNoCrossDetection,
   resizeRgbHeightForInference,
 } from "./detections/exports.js";
 import { createSegmentationSession, defaultModelUrl, runYoloSegmentation } from "./inference/yoloSegmentation.js";
 import { rgbToImageData } from "./render/imageData.js";
-import { makeOverlayImage, makeOverlayImageFromRgb } from "./render/overlay.js";
+import {
+  makeOverlayBaseImage,
+  makeOverlayBaseImageFromRgb,
+  makeOverlayImageFromBase,
+} from "./render/overlay.js";
 import { makeEchogramVisualFromBgr } from "./render/visualizeEchogram.js";
 import { bgrToRgbImage, decodeSonarBuffer } from "./sonar/decoder.js";
 
@@ -55,6 +61,7 @@ const elements = {
   detectionsBody: document.querySelector("#detections-body"),
   decodedCanvas: document.querySelector("#decoded-canvas"),
   overlayCanvas: document.querySelector("#overlay-canvas"),
+  toggleNoCrossButton: document.querySelector("#toggle-no-cross-button"),
   downloadDecodedButton: document.querySelector("#download-decoded-button"),
   downloadDecodedJpgButton: document.querySelector("#download-decoded-jpg-button"),
   downloadOverlayButton: document.querySelector("#download-overlay-button"),
@@ -74,6 +81,7 @@ const state = {
   rgbImage: null,
   visualRgbImage: null,
   overlayImage: null,
+  overlayBaseImageData: null,
   decodedImageData: null,
   overlayImageData: null,
   detections: [],
@@ -85,6 +93,7 @@ const state = {
   inferenceUsedNativeFps: true,
   inferenceNumBins: null,
   inferenceUsedNativeBins: true,
+  hideNoCrossTracks: false,
   exportFiles: {
     csvName: null,
     csvText: null,
@@ -399,6 +408,7 @@ function computeAutoInferenceTargets(width, height) {
 
 function updateDownloadButtons() {
   const busy = state.running;
+  elements.toggleNoCrossButton.disabled = busy || !state.overlayBaseImageData;
   elements.downloadDecodedButton.disabled = busy || !state.decodedImageData;
   elements.downloadDecodedJpgButton.disabled = busy || !state.decodedImageData;
   elements.downloadOverlayButton.disabled = busy || !state.overlayImageData;
@@ -654,6 +664,67 @@ function renderOverlayPreview(
 ) {
   state.overlayImageData = imageData;
   drawImageDataToCanvas(elements.overlayCanvas, imageData);
+  renderOverlaySummary({
+    achievedFrameRate,
+    usedNativeFps,
+    nativeHeaderFrameRate,
+    inferenceNumBins,
+    usedNativeBins,
+  });
+  updateDownloadButtons();
+}
+
+function visibleOverlayDetections() {
+  if (!state.hideNoCrossTracks) {
+    return state.detections;
+  }
+  return state.detections.filter(
+    (detection) => !isNoCrossDetection(detection.className, Number(detection.classId)),
+  );
+}
+
+function countOverlayDirections(detections, upstreamDirection) {
+  const counts = {
+    upstream: 0,
+    downstream: 0,
+    noCrossing: 0,
+  };
+
+  for (const detection of detections) {
+    const classId = Number(detection.classId);
+    const direction = fcDirectionForCrossing(detection.className, classId, upstreamDirection);
+    if (direction === "Up") {
+      counts.upstream += 1;
+      continue;
+    }
+    if (direction === "Down") {
+      counts.downstream += 1;
+      continue;
+    }
+    if (isNoCrossDetection(detection.className, classId)) {
+      counts.noCrossing += 1;
+      continue;
+    }
+    counts.noCrossing += 1;
+  }
+
+  return counts;
+}
+
+function renderOverlaySummary({
+  detections = state.detections,
+  achievedFrameRate = state.inferenceFrameRate,
+  usedNativeFps = state.inferenceUsedNativeFps,
+  nativeHeaderFrameRate = headerFramerateFromMetadata(state.decoded?.metadata ?? null),
+  inferenceNumBins = state.inferenceNumBins,
+  usedNativeBins = state.inferenceUsedNativeBins,
+} = {}) {
+  if (achievedFrameRate === null || inferenceNumBins === null) {
+    elements.overlaySummary.textContent = "Run inference to populate this panel.";
+    return;
+  }
+
+  const counts = countOverlayDirections(detections, currentUpstreamDirection());
   const nativeDisplayRate = nativeHeaderFrameRate ?? achievedFrameRate;
   const fpsSummary = usedNativeFps
     ? `native ${nativeDisplayRate.toFixed(2)} fps`
@@ -661,9 +732,42 @@ function renderOverlayPreview(
   const binsSummary = usedNativeBins
     ? `native ${inferenceNumBins} bins`
     : `${inferenceNumBins} bins`;
-  elements.overlaySummary.textContent =
-    `${detections.length} detections rendered | inference: ${fpsSummary} | ${binsSummary}`;
-  updateDownloadButtons();
+
+  elements.overlaySummary.innerHTML =
+    `${detections.length} detections rendered (` +
+    `<span class="overlay-summary-count overlay-summary-count-upstream">${counts.upstream} upstream</span>, ` +
+    `<span class="overlay-summary-count overlay-summary-count-downstream">${counts.downstream} downstream</span>, ` +
+    `<span class="overlay-summary-count overlay-summary-count-no-crossing">${counts.noCrossing} no crossing</span>)` +
+    ` | inference: ${fpsSummary} | ${binsSummary}`;
+}
+
+function syncNoCrossButton() {
+  elements.toggleNoCrossButton.textContent = state.hideNoCrossTracks
+    ? "Show no-cross"
+    : "Hide no-cross";
+  elements.toggleNoCrossButton.setAttribute("aria-pressed", String(state.hideNoCrossTracks));
+}
+
+function rerenderOverlayFromState() {
+  if (!state.overlayBaseImageData) {
+    elements.overlaySummary.textContent = "Run inference to populate this panel.";
+    state.overlayImageData = null;
+    updateDownloadButtons();
+    return;
+  }
+
+  const detections = visibleOverlayDetections();
+  const overlayImage = makeOverlayImageFromBase(state.overlayBaseImageData, detections);
+  state.overlayImage = overlayImage;
+  renderOverlayPreview(
+    overlayImage,
+    detections,
+    state.inferenceFrameRate,
+    state.inferenceUsedNativeFps,
+    headerFramerateFromMetadata(state.decoded?.metadata ?? null),
+    state.inferenceNumBins,
+    state.inferenceUsedNativeBins,
+  );
 }
 
 function renderDetectionsTable(displayRows, detections) {
@@ -872,6 +976,9 @@ function buildExportFiles() {
     ),
   };
   renderDetectionsTable(state.displayRows, state.detections);
+  if (state.overlayImageData) {
+    renderOverlaySummary();
+  }
   updateDownloadButtons();
 }
 
@@ -905,6 +1012,7 @@ async function decodeSelectedFile() {
   state.rgbImage = rgbImage;
   state.visualRgbImage = visualRgbImage;
   state.overlayImage = null;
+  state.overlayBaseImageData = null;
   state.overlayImageData = null;
   state.detections = [];
   state.predictionRows = [];
@@ -913,6 +1021,9 @@ async function decodeSelectedFile() {
   state.decodeRequest = decodeRequest;
   state.inferenceFrameRate = null;
   state.inferenceUsedNativeFps = true;
+  state.inferenceNumBins = null;
+  state.inferenceUsedNativeBins = true;
+  state.hideNoCrossTracks = false;
   state.exportFiles = {
     csvName: null,
     csvText: null,
@@ -924,6 +1035,7 @@ async function decodeSelectedFile() {
   renderMeta(decoded);
   renderDecodedPreview(decoded, visualRgbImage);
   syncRunButtonLabel();
+  syncNoCrossButton();
   elements.overlaySummary.textContent = "Run inference to populate this panel.";
   elements.countsSummary.textContent = "No detections yet.";
   elements.detectionsBody.innerHTML = '<tr><td colspan="5">No detections yet.</td></tr>';
@@ -1075,17 +1187,19 @@ async function runSegmentation() {
     throw error;
   }
 
-  const overlayImage =
+  state.detections = result.detections;
+  state.hideNoCrossTracks = false;
+  syncNoCrossButton();
+  state.overlayBaseImageData =
     usedNativeFps && usedNativeBins
-      ? makeOverlayImage(decoded.imageBgr, decoded.width, decoded.height, result.detections)
-      : makeOverlayImageFromRgb(
+      ? makeOverlayBaseImage(decoded.imageBgr, decoded.width, decoded.height)
+      : makeOverlayBaseImageFromRgb(
           inferenceRgbImage,
           inferenceWidth,
           inferenceHeight,
-          result.detections,
         );
+  const overlayImage = makeOverlayImageFromBase(state.overlayBaseImageData, visibleOverlayDetections());
   state.overlayImage = overlayImage;
-  state.detections = result.detections;
   state.predictionRows = buildPredictionRows(
     result.detections,
     decoded.metadata,
@@ -1114,6 +1228,7 @@ function resetVisuals() {
   state.rgbImage = null;
   state.visualRgbImage = null;
   state.overlayImage = null;
+  state.overlayBaseImageData = null;
   state.decodedImageData = null;
   state.overlayImageData = null;
   state.detections = [];
@@ -1125,6 +1240,7 @@ function resetVisuals() {
   state.inferenceUsedNativeFps = true;
   state.inferenceNumBins = null;
   state.inferenceUsedNativeBins = true;
+  state.hideNoCrossTracks = false;
   state.exportFiles = {
     csvName: null,
     csvText: null,
@@ -1149,6 +1265,7 @@ function resetVisuals() {
   setStatus("Idle.", 0);
   clearStatusError();
   syncRunButtonLabel();
+  syncNoCrossButton();
   updateDownloadButtons();
 }
 
@@ -1248,6 +1365,15 @@ for (const input of elements.upstreamDirectionInputs) {
     buildExportFiles();
   });
 }
+
+elements.toggleNoCrossButton.addEventListener("click", () => {
+  if (!state.overlayBaseImageData) {
+    return;
+  }
+  state.hideNoCrossTracks = !state.hideNoCrossTracks;
+  syncNoCrossButton();
+  rerenderOverlayFromState();
+});
 
 for (const input of [
   elements.backend,
@@ -1377,6 +1503,7 @@ window.addEventListener("keydown", (event) => {
 
 applyStoredSettings();
 syncRunButtonLabel();
+syncNoCrossButton();
 updateDownloadButtons();
 setStatus("Idle.", 0);
 clearStatusError();

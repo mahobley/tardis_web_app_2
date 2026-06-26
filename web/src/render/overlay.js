@@ -28,6 +28,38 @@ function drawMaskOverlay(image, mask, color, alpha = 0.75) {
   }
 }
 
+function grayscaleBaseFromBgr(imageBgr, width, height) {
+  const rgba = new Uint8ClampedArray(width * height * 4);
+  for (
+    let pixel = 0, src = 0, dst = 0;
+    pixel < width * height;
+    pixel += 1, src += 3, dst += 4
+  ) {
+    const gray = imageBgr[src + 2];
+    rgba[dst] = gray;
+    rgba[dst + 1] = gray;
+    rgba[dst + 2] = gray;
+    rgba[dst + 3] = 255;
+  }
+  return new ImageData(rgba, width, height);
+}
+
+function grayscaleBaseFromRgb(rgbImage, width, height) {
+  const rgba = new Uint8ClampedArray(width * height * 4);
+  for (
+    let pixel = 0, src = 0, dst = 0;
+    pixel < width * height;
+    pixel += 1, src += 3, dst += 4
+  ) {
+    const gray = rgbImage[src];
+    rgba[dst] = gray;
+    rgba[dst + 1] = gray;
+    rgba[dst + 2] = gray;
+    rgba[dst + 3] = 255;
+  }
+  return new ImageData(rgba, width, height);
+}
+
 function assignDetectionColours(detections) {
   const grouped = new Map();
 
@@ -47,46 +79,28 @@ function assignDetectionColours(detections) {
   }
 }
 
-export function makeOverlayImage(imageBgr, width, height, detections) {
-  const rgba = new Uint8ClampedArray(width * height * 4);
-  for (
-    let pixel = 0, src = 0, dst = 0;
-    pixel < width * height;
-    pixel += 1, src += 3, dst += 4
-  ) {
-    const gray = imageBgr[src + 2];
-    rgba[dst] = gray;
-    rgba[dst + 1] = gray;
-    rgba[dst + 2] = gray;
-    rgba[dst + 3] = 255;
-  }
-
+export function makeOverlayImageFromBase(baseImageData, detections) {
+  const rgba = new Uint8ClampedArray(baseImageData.data);
   assignDetectionColours(detections);
   for (const detection of detections) {
     drawMaskOverlay(rgba, detection.mask, detection.color);
   }
 
-  return new ImageData(rgba, width, height);
+  return new ImageData(rgba, baseImageData.width, baseImageData.height);
+}
+
+export function makeOverlayBaseImage(imageBgr, width, height) {
+  return grayscaleBaseFromBgr(imageBgr, width, height);
+}
+
+export function makeOverlayImage(imageBgr, width, height, detections) {
+  return makeOverlayImageFromBase(grayscaleBaseFromBgr(imageBgr, width, height), detections);
+}
+
+export function makeOverlayBaseImageFromRgb(rgbImage, width, height) {
+  return grayscaleBaseFromRgb(rgbImage, width, height);
 }
 
 export function makeOverlayImageFromRgb(rgbImage, width, height, detections) {
-  const rgba = new Uint8ClampedArray(width * height * 4);
-  for (
-    let pixel = 0, src = 0, dst = 0;
-    pixel < width * height;
-    pixel += 1, src += 3, dst += 4
-  ) {
-    const gray = rgbImage[src];
-    rgba[dst] = gray;
-    rgba[dst + 1] = gray;
-    rgba[dst + 2] = gray;
-    rgba[dst + 3] = 255;
-  }
-
-  assignDetectionColours(detections);
-  for (const detection of detections) {
-    drawMaskOverlay(rgba, detection.mask, detection.color);
-  }
-
-  return new ImageData(rgba, width, height);
+  return makeOverlayImageFromBase(grayscaleBaseFromRgb(rgbImage, width, height), detections);
 }
