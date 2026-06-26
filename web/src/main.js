@@ -24,7 +24,14 @@ import {
 import { makeEchogramVisualFromBgr } from "./render/visualizeEchogram.js";
 import { bgrToRgbImage, decodeSonarBuffer } from "./sonar/decoder.js";
 
+const EXAMPLE_ARIS_FILENAME = "2018-08-17-JD229_Channel_Stratum1_Set1_CH_2018-08-17_230006.aris";
+const EXAMPLE_ARIS_URL = new URL(
+  `../../example_aris/${EXAMPLE_ARIS_FILENAME}`,
+  import.meta.url,
+).href;
+
 const elements = {
+  exampleArisButton: document.querySelector("#example-aris-button"),
   sonarFile: document.querySelector("#sonar-file"),
   modelFile: document.querySelector("#model-file"),
   useBundledModel: document.querySelector("#use-bundled-model"),
@@ -372,6 +379,15 @@ function syncRunButtonLabel() {
   elements.runButton.textContent = state.decoded ? "Run TaRDIS" : "Generate Echogram + Run TaRDIS";
 }
 
+function currentInputSonarFile() {
+  const [file] = elements.sonarFile.files ?? [];
+  return file ?? null;
+}
+
+function currentSelectedSonarFile() {
+  return state.sonarFile ?? currentInputSonarFile();
+}
+
 function currentUpstreamDirection() {
   return elements.upstreamDirectionInputs.find((input) => input.checked)?.value ?? "left";
 }
@@ -420,6 +436,7 @@ function updateDownloadButtons() {
 
 function setBusy(busy) {
   state.running = busy;
+  elements.exampleArisButton.disabled = busy;
   elements.sonarFile.disabled = busy;
   elements.runAllFrames.disabled = busy;
   for (const input of elements.upstreamDirectionInputs) {
@@ -448,7 +465,7 @@ function fileStem(filename) {
 }
 
 function currentArisStem() {
-  return fileStem(state.sonarFile?.name ?? "echogram");
+  return fileStem(currentSelectedSonarFile()?.name ?? "echogram");
 }
 
 function currentCsvBaseName() {
@@ -983,7 +1000,7 @@ function buildExportFiles() {
 }
 
 async function decodeSelectedFile() {
-  const [file] = elements.sonarFile.files ?? [];
+  const file = currentSelectedSonarFile();
   if (!file) {
     throw new Error("Select an ARIS or DDF file first");
   }
@@ -1045,6 +1062,34 @@ async function decodeSelectedFile() {
   updateDownloadButtons();
   setStatus(`Generated echogram for ${file.name}`, 100);
   return decoded;
+}
+
+async function selectExampleArisFile() {
+  setStatus("Loading example ARIS file...", 0);
+  await waitForNextPaint();
+
+  const response = await fetch(EXAMPLE_ARIS_URL);
+  if (!response.ok) {
+    throw new Error(`Unable to load bundled example ARIS (${response.status})`);
+  }
+
+  const blob = await response.blob();
+  const file = new File([blob], EXAMPLE_ARIS_FILENAME, {
+    type: blob.type || "application/octet-stream",
+    lastModified: 0,
+  });
+
+  try {
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    elements.sonarFile.files = transfer.files;
+  } catch {
+    elements.sonarFile.value = "";
+  }
+
+  resetVisuals();
+  state.sonarFile = file;
+  setStatus(`Selected example file ${file.name}`, 0);
 }
 
 async function runSegmentation() {
@@ -1391,6 +1436,16 @@ for (const input of [
 }
 
 elements.sonarFile.addEventListener("change", resetVisuals);
+
+elements.exampleArisButton.addEventListener("click", async () => {
+  try {
+    await runWithBusyState(async () => {
+      await selectExampleArisFile();
+    });
+  } catch (error) {
+    console.error(error);
+  }
+});
 
 elements.decodeButton.addEventListener("click", async () => {
   if (!validateControls({ report: true })) {

@@ -42,7 +42,6 @@ logs/
 *.gif
 *.pyc
 *.pt
-*.aris
 .pt
 outputs/
 dist/
@@ -51,3 +50,4 @@ build/
 node_modules/
 EchoSegWindowsDistribution/
 __pycache__/
+example.aris
