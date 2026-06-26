@@ -578,9 +578,15 @@ export function buildPredictionRows(
     const centerFrameDistance = convertBinToM(mappedCenterFrameBin, echogramMetadata);
     const startDistance = convertBinToM(mappedStartBinY, echogramMetadata);
     const endDistance = convertBinToM(mappedEndBinY, echogramMetadata);
-    const minimumDistance = convertBinToM(mappedMinimumBinY, echogramMetadata);
-    const maximumDistance = convertBinToM(mappedMaximumBinY, echogramMetadata);
+    const minBinDistance = convertBinToM(mappedMinimumBinY, echogramMetadata);
+    const maxBinDistance = convertBinToM(mappedMaximumBinY, echogramMetadata);
     const averageDistance = convertBinToM(mappedAverageBinY, echogramMetadata);
+    let minimumDistance = minBinDistance;
+    let maximumDistance = maxBinDistance;
+    if (Number.isFinite(minBinDistance) && Number.isFinite(maxBinDistance)) {
+      minimumDistance = Math.min(minBinDistance, maxBinDistance);
+      maximumDistance = Math.max(minBinDistance, maxBinDistance);
+    }
 
     rows.push({
       instance_index: roundInt(index),

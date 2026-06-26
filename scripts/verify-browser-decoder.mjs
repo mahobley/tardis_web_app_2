@@ -31,9 +31,13 @@ function compareBytes(expected, actual) {
 }
 
 const repoRoot = resolve(new URL("..", import.meta.url).pathname);
+const defaultInputPath = resolve(
+  repoRoot,
+  "example_aris/2018-08-17-JD229_Channel_Stratum1_Set1_CH_2018-08-17_230006.aris",
+);
 const inputPath = process.argv[2]
   ? resolve(process.argv[2])
-  : resolve(repoRoot, "example.aris");
+  : defaultInputPath;
 const startFrame = process.argv[3] ? Number(process.argv[3]) : 0;
 const endFrame = process.argv[4] ? Number(process.argv[4]) : -1;
 

@@ -36,7 +36,7 @@ pip install -r requirements.txt
 npm run verify:decoder
 ```
 
-By default that runs against `example.aris` and compares the decoded bytes exactly.
+By default that runs against `example_aris/2018-08-17-JD229_Channel_Stratum1_Set1_CH_2018-08-17_230006.aris` and compares the decoded bytes exactly.
 
 ## Layout
 
