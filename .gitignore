@@ -26,7 +26,6 @@ coverage.xml
 *.swp
 .DS_Store
 Thumbs.db
-*.json
 !package.json
 !package-lock.json
 *.h5
@@ -44,6 +43,7 @@ logs/
 *.pt
 .pt
 outputs/
+generated_echograms/
 dist/
 dist-web/
 build/

@@ -1,0 +1,17 @@
+{
+  "shape": [
+    613,
+    5288,
+    3
+  ],
+  "dtype": "uint8",
+  "metadata": {
+    "version_id": 5,
+    "numframes": 5289,
+    "numbeams": 48,
+    "samplesperchannel": 613,
+    "frameheadersize": 1024,
+    "fileheadersize": 1024,
+    "framesize": 29424
+  }
+}
