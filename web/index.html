@@ -296,7 +296,16 @@
         <span id="zoom-coords">x 0, y 0</span>
       </div>
     </div>
-    <canvas id="zoom-canvas" width="192" height="192"></canvas>
+    <div class="zoom-grid">
+      <div class="zoom-panel">
+        <div class="zoom-panel-label">Echogram detail</div>
+        <canvas id="zoom-canvas" width="192" height="192"></canvas>
+      </div>
+      <div class="zoom-panel">
+        <div class="zoom-panel-label">Original frame</div>
+        <canvas id="zoom-frame-canvas" width="48" height="128"></canvas>
+      </div>
+    </div>
   </aside>
 
   <script type="module" src="/src/main.js"></script>

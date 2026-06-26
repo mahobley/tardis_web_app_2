@@ -22,7 +22,7 @@ import {
   makeOverlayImageFromBase,
 } from "./render/overlay.js";
 import { makeEchogramVisualFromBgr } from "./render/visualizeEchogram.js";
-import { bgrToRgbImage, decodeSonarBuffer } from "./sonar/decoder.js";
+import { bgrToRgbImage, decodeSonarBuffer, decodeSonarFrameRgbFromFile } from "./sonar/decoder.js";
 
 const EXAMPLE_ARIS_FILENAME = "2018-08-17-JD229_Channel_Stratum1_Set1_CH_2018-08-17_230006.aris";
 const EXAMPLE_ARIS_URL = new URL(
@@ -78,6 +78,7 @@ const elements = {
   downloadEchotasticButton: document.querySelector("#download-echotastic-button"),
   zoomPopup: document.querySelector("#zoom-popup"),
   zoomCanvas: document.querySelector("#zoom-canvas"),
+  zoomFrameCanvas: document.querySelector("#zoom-frame-canvas"),
   zoomTitle: document.querySelector("#zoom-title"),
   zoomCoords: document.querySelector("#zoom-coords"),
 };
@@ -121,6 +122,9 @@ const state = {
     imageY: 0,
     clientX: 0,
     clientY: 0,
+    frameNumber: null,
+    previewFrameNumber: null,
+    previewRequestId: 0,
   },
 };
 
@@ -597,7 +601,7 @@ function buildDecodedSummary(decoded) {
   return parts.join(", ");
 }
 
-function buildZoomCoordsText(sourceCanvas, imageX, imageY, imageHeight) {
+function hoveredFrameNumberForCanvas(sourceCanvas, imageX) {
   const frameStart = state.decoded?.frameRange?.start ?? 0;
   let frameNumber = frameStart + imageX;
   if (sourceCanvas === elements.overlayCanvas) {
@@ -606,6 +610,11 @@ function buildZoomCoordsText(sourceCanvas, imageX, imageY, imageHeight) {
       frameNumber = Math.round(mappedFrameNumber);
     }
   }
+  return frameNumber;
+}
+
+function buildZoomCoordsText(sourceCanvas, imageX, imageY, imageHeight) {
+  const frameNumber = hoveredFrameNumberForCanvas(sourceCanvas, imageX);
   const metadata = state.decoded?.metadata ?? null;
   const windowStart = asFiniteNumber(metadata?.windowstart);
   const windowLength = asFiniteNumber(metadata?.windowlength);
@@ -617,6 +626,48 @@ function buildZoomCoordsText(sourceCanvas, imageX, imageY, imageHeight) {
   }
 
   return `frame ${frameNumber}`;
+}
+
+function clearZoomFramePreview() {
+  state.zoom.previewRequestId += 1;
+  elements.zoomFrameCanvas.width = 48;
+  elements.zoomFrameCanvas.height = 128;
+  const ctx = elements.zoomFrameCanvas.getContext("2d");
+  ctx.fillStyle = "#111827";
+  ctx.fillRect(0, 0, elements.zoomFrameCanvas.width, elements.zoomFrameCanvas.height);
+  state.zoom.previewFrameNumber = null;
+}
+
+async function renderZoomFramePreview(frameNumber) {
+  if (!state.sonarFile || !state.decoded?.metadata || !Number.isFinite(frameNumber)) {
+    clearZoomFramePreview();
+    return;
+  }
+  if (state.zoom.previewFrameNumber === frameNumber) {
+    return;
+  }
+
+  const requestId = state.zoom.previewRequestId + 1;
+  state.zoom.previewRequestId = requestId;
+  const decodedFrame = await decodeSonarFrameRgbFromFile(
+    state.sonarFile,
+    state.decoded.metadata,
+    frameNumber,
+  );
+  if (requestId !== state.zoom.previewRequestId || state.zoom.frameNumber !== frameNumber) {
+    return;
+  }
+  if (!decodedFrame) {
+    clearZoomFramePreview();
+    return;
+  }
+
+  const imageData = rgbToImageData(decodedFrame.rgbImage, decodedFrame.width, decodedFrame.height);
+  elements.zoomFrameCanvas.width = imageData.width;
+  elements.zoomFrameCanvas.height = imageData.height;
+  const ctx = elements.zoomFrameCanvas.getContext("2d", { willReadFrequently: true });
+  ctx.putImageData(imageData, 0, 0);
+  state.zoom.previewFrameNumber = decodedFrame.frameIndex;
 }
 
 function renderMeta(decoded) {
@@ -832,6 +883,8 @@ function hideZoomPopup() {
     restoreCanvasBaseImage(state.zoom.sourceCanvas);
   }
   state.zoom.sourceCanvas = null;
+  state.zoom.frameNumber = null;
+  state.zoom.previewRequestId += 1;
 }
 
 function renderZoomPopup(sourceCanvas, title, imageX, imageY, clientX, clientY) {
@@ -884,6 +937,7 @@ function renderZoomPopup(sourceCanvas, title, imageX, imageY, clientX, clientY) 
 
   elements.zoomTitle.textContent = title;
   elements.zoomCoords.textContent = `${buildZoomCoordsText(sourceCanvas, imageX, imageY, sourceCanvas.height)} | ${sampleWidth} px | +/-`;
+  void renderZoomFramePreview(state.zoom.frameNumber);
   elements.zoomPopup.hidden = false;
 
   const popupWidth = elements.zoomPopup.offsetWidth || 624;
@@ -933,6 +987,7 @@ function updateZoomPopup(sourceCanvas, title, event) {
   state.zoom.imageY = imageY;
   state.zoom.clientX = event.clientX;
   state.zoom.clientY = event.clientY;
+  state.zoom.frameNumber = hoveredFrameNumberForCanvas(sourceCanvas, imageX);
   rerenderZoomPopup();
 }
 
@@ -1059,6 +1114,7 @@ async function decodeSelectedFile() {
     echotasticName: null,
     echotasticText: null,
   };
+  clearZoomFramePreview();
   renderMeta(decoded);
   renderDecodedPreview(decoded, visualRgbImage);
   syncRunButtonLabel();
@@ -1315,6 +1371,7 @@ function resetVisuals() {
   elements.overlayCanvas.width = 1;
   elements.overlayCanvas.height = 1;
   elements.overlayCanvas.classList.add("canvas-empty");
+  clearZoomFramePreview();
   hideZoomPopup();
   stopStatusTimer("Time");
   setStatus("Idle.", 0);
@@ -1572,3 +1629,4 @@ syncNoCrossButton();
 updateDownloadButtons();
 setStatus("Idle.", 0);
 clearStatusError();
+clearZoomFramePreview();

@@ -474,6 +474,15 @@ function getFrameData(bytes, info, frameIndex) {
   return bytes.subarray(payloadStart, payloadEnd);
 }
 
+function framePayloadRange(info, frameIndex) {
+  const frameSizeWithHeader = info.frameheadersize + info.framesize;
+  const frameStart = info.fileheadersize + frameIndex * frameSizeWithHeader;
+  return {
+    payloadStart: frameStart + info.frameheadersize,
+    payloadEnd: frameStart + info.frameheadersize + info.framesize,
+  };
+}
+
 function allZero(bytes) {
   for (let index = 0; index < bytes.length; index += 1) {
     if (bytes[index] !== 0) {
@@ -718,6 +727,62 @@ export async function decodeSonarBuffer(
     returnAsBgr,
     meanNormalizationValue,
   };
+}
+
+function decodeFramePayloadRgb(frame, info, frameIndex) {
+  if (!frame || frame.length !== info.samplesperchannel * info.numbeams) {
+    return null;
+  }
+
+  const width = info.numbeams;
+  const height = info.samplesperchannel;
+  const planeSize = width * height;
+  let maxValue = 0;
+  for (let index = 0; index < planeSize; index += 1) {
+    if (frame[index] > maxValue) {
+      maxValue = frame[index];
+    }
+  }
+
+  const rgbImage = new Uint8ClampedArray(width * height * 3);
+  const safeMax = Math.max(1, maxValue);
+  for (let row = 0; row < height; row += 1) {
+    const rowOffset = row * width;
+    for (let beam = 0; beam < width; beam += 1) {
+      const srcIndex = planeSize - 1 - (rowOffset + beam);
+      const normalized = frame[srcIndex] / safeMax;
+      const intensity = clipUint8(Math.pow(normalized, 0.7) * 255);
+      const pixelBase = (rowOffset + beam) * 3;
+      rgbImage[pixelBase] = intensity;
+      rgbImage[pixelBase + 1] = intensity;
+      rgbImage[pixelBase + 2] = intensity;
+    }
+  }
+
+  return {
+    rgbImage,
+    width,
+    height,
+    frameIndex,
+  };
+}
+
+export function decodeSonarFrameRgb(input, frameIndex) {
+  const bytes = toUint8Array(input);
+  const info = parseSonarHeader(bytes);
+  const resolvedFrameIndex = Math.max(0, Math.min(info.numframes - 1, Math.round(Number(frameIndex))));
+  const frame = getFrameData(bytes, info, resolvedFrameIndex);
+  return decodeFramePayloadRgb(frame, info, resolvedFrameIndex);
+}
+
+export async function decodeSonarFrameRgbFromFile(file, info, frameIndex) {
+  if (!file || !info) {
+    return null;
+  }
+  const resolvedFrameIndex = Math.max(0, Math.min(info.numframes - 1, Math.round(Number(frameIndex))));
+  const { payloadStart, payloadEnd } = framePayloadRange(info, resolvedFrameIndex);
+  const frameBytes = new Uint8Array(await file.slice(payloadStart, payloadEnd).arrayBuffer());
+  return decodeFramePayloadRgb(frameBytes, info, resolvedFrameIndex);
 }
 
 export function bgrToRgbImage(bgrImage) {

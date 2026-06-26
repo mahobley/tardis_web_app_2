@@ -512,7 +512,7 @@ canvas {
 .zoom-popup {
   position: fixed;
   z-index: 50;
-  width: 624px;
+  width: min(760px, calc(100vw - 24px));
   padding: 0.8rem;
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -549,11 +549,35 @@ canvas {
   font-size: 0.82rem;
 }
 
-#zoom-canvas {
+.zoom-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.7fr);
+  gap: 0.75rem;
+}
+
+.zoom-panel {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.zoom-panel-label {
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#zoom-canvas,
+#zoom-frame-canvas {
   display: block;
   width: 100%;
   border-radius: 12px;
   background: #111827;
+}
+
+#zoom-frame-canvas {
+  aspect-ratio: 48 / 128;
 }
 
 .results-card {
@@ -633,5 +657,9 @@ code {
 
   .viewer-header p {
     text-align: left;
+  }
+
+  .zoom-grid {
+    grid-template-columns: 1fr;
   }
 }
