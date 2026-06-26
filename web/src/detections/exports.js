@@ -626,6 +626,7 @@ export function buildDisplayRows(predictionRows, upstreamDirection) {
           fcDirectionForCrossing(row.class_name, asFloat(row.class_id), upstreamDirection) || "--",
         rangeMeters: Number.isNaN(rangeMeters) ? null : Number(rangeMeters.toFixed(2)),
         confidence: String(row.confidence ?? "nan"),
+        isNoCross: isNoCrossDetection(row.class_name, asFloat(row.class_id)),
       };
     })
     .sort((a, b) => {
