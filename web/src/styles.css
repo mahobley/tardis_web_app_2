@@ -571,13 +571,45 @@ canvas {
 #zoom-canvas,
 #zoom-frame-canvas {
   display: block;
-  width: 100%;
   border-radius: 12px;
   background: #111827;
 }
 
+#zoom-canvas {
+  width: 100%;
+}
+
+#zoom-frame-stage {
+  position: relative;
+  max-width: 100%;
+  justify-self: center;
+}
+
 #zoom-frame-canvas {
-  aspect-ratio: 48 / 128;
+  width: 100%;
+  height: 100%;
+}
+
+.zoom-frame-guide {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.zoom-frame-guide::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -1px;
+  height: 2px;
+  background: repeating-linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0.98) 0 10px,
+    transparent 10px 20px
+  );
 }
 
 .results-card {

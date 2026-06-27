@@ -80,7 +80,9 @@ const elements = {
   downloadEchotasticButton: document.querySelector("#download-echotastic-button"),
   zoomPopup: document.querySelector("#zoom-popup"),
   zoomCanvas: document.querySelector("#zoom-canvas"),
+  zoomFrameStage: document.querySelector("#zoom-frame-stage"),
   zoomFrameCanvas: document.querySelector("#zoom-frame-canvas"),
+  zoomFrameGuide: document.querySelector("#zoom-frame-guide"),
   zoomTitle: document.querySelector("#zoom-title"),
   zoomCoords: document.querySelector("#zoom-coords"),
 };
@@ -640,6 +642,7 @@ function clearZoomFramePreview() {
   const ctx = elements.zoomFrameCanvas.getContext("2d");
   ctx.fillStyle = "#111827";
   ctx.fillRect(0, 0, elements.zoomFrameCanvas.width, elements.zoomFrameCanvas.height);
+  elements.zoomFrameGuide.hidden = true;
   state.zoom.previewFrameNumber = null;
   state.zoom.previewFrameImageData = null;
 }
@@ -685,19 +688,45 @@ function hoveredFrameGuideY(sourceCanvas, imageY, targetHeight) {
   return Math.max(0, Math.min(targetHeight - 1, Math.round(ratio * (targetHeight - 1))));
 }
 
-function drawZoomFrameGuide(ctx, width, y) {
-  if (!Number.isFinite(y)) {
+function syncZoomFrameGuide() {
+  if (!state.zoom.sourceCanvas || !state.zoom.previewFrameImageData) {
+    elements.zoomFrameGuide.hidden = true;
     return;
   }
-  ctx.save();
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([6, 4]);
-  ctx.beginPath();
-  ctx.moveTo(0, y + 0.5);
-  ctx.lineTo(width, y + 0.5);
-  ctx.stroke();
-  ctx.restore();
+
+  const guideY = hoveredFrameGuideY(
+    state.zoom.sourceCanvas,
+    state.zoom.imageY,
+    state.zoom.previewFrameImageData.height,
+  );
+  if (!Number.isFinite(guideY)) {
+    elements.zoomFrameGuide.hidden = true;
+    return;
+  }
+
+  const displayHeight = elements.zoomFrameStage.getBoundingClientRect().height;
+  const targetHeight = state.zoom.previewFrameImageData.height;
+  if (!(displayHeight > 0) || !(targetHeight > 1)) {
+    elements.zoomFrameGuide.hidden = true;
+    return;
+  }
+
+  const ratio = guideY / (targetHeight - 1);
+  const displayY = Math.max(1, Math.min(displayHeight - 2, Math.round(ratio * (displayHeight - 1))));
+  elements.zoomFrameGuide.style.top = `${displayY}px`;
+  elements.zoomFrameGuide.hidden = false;
+}
+
+function syncZoomFrameCanvasDisplaySize() {
+  const detailHeight = elements.zoomCanvas.getBoundingClientRect().height;
+  if (!(detailHeight > 0)) {
+    return;
+  }
+  const roundedHeight = Math.round(detailHeight);
+  const roundedWidth = Math.round(detailHeight * 0.618);
+  elements.zoomFrameStage.style.height = `${roundedHeight}px`;
+  elements.zoomFrameStage.style.width = `${roundedWidth}px`;
+  syncZoomFrameGuide();
 }
 
 function paintZoomFramePreview(imageData) {
@@ -705,10 +734,7 @@ function paintZoomFramePreview(imageData) {
   elements.zoomFrameCanvas.height = imageData.height;
   const ctx = elements.zoomFrameCanvas.getContext("2d", { willReadFrequently: true });
   ctx.putImageData(imageData, 0, 0);
-  const guideY = state.zoom.sourceCanvas
-    ? hoveredFrameGuideY(state.zoom.sourceCanvas, state.zoom.imageY, imageData.height)
-    : null;
-  drawZoomFrameGuide(ctx, imageData.width, guideY);
+  syncZoomFrameCanvasDisplaySize();
 }
 
 async function renderZoomFramePreview(frameNumber) {
@@ -1039,6 +1065,7 @@ function renderZoomPopup(sourceCanvas, title, imageX, imageY, clientX, clientY) 
   elements.zoomCoords.textContent = `${buildZoomCoordsText(sourceCanvas, imageX, imageY, sourceCanvas.height)} | ${sampleWidth} px | +/-`;
   void renderZoomFramePreview(state.zoom.frameNumber);
   elements.zoomPopup.hidden = false;
+  syncZoomFrameCanvasDisplaySize();
 
   const popupWidth = elements.zoomPopup.offsetWidth || 624;
   const popupHeight = elements.zoomPopup.offsetHeight || 260;
